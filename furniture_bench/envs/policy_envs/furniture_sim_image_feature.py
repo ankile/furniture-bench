@@ -11,7 +11,7 @@ from furniture_bench.robot.robot_state import filter_and_concat_robot_state
 
 
 class FurnitureSimImageFeature(FurnitureSimEnv):
-    def __init__(self, **kwargs):
+    def __init__(self, encoder_type, include_raw_images=False, **kwargs):
         super().__init__(
             concat_robot_state=True,
             resize_img=False,
@@ -22,12 +22,12 @@ class FurnitureSimImageFeature(FurnitureSimEnv):
 
         assert self.num_envs == 1, "FurnitureSimImageFeature supports only 1 env."
 
-        if kwargs["encoder_type"] == "r3m":
+        if encoder_type == "r3m":
             from r3m import load_r3m
 
             self.layer = load_r3m("resnet50")
             self.embedding_dim = 2048
-        elif kwargs["encoder_type"] == "vip":
+        elif encoder_type == "vip":
             from vip import load_vip
 
             self.layer = load_vip()
@@ -35,9 +35,11 @@ class FurnitureSimImageFeature(FurnitureSimEnv):
         self.layer.requires_grad_(False)
         self.layer.eval()
 
+        self.include_raw_image = include_raw_images
+
     @property
     def observation_space(self):
-        img_shape = (*config["camera"]["resized_img_size"], 3)
+        # img_shape = (*config["camera"]["resized_img_size"], 3)
         robot_state_dim = 14
 
         return spaces.Dict(
@@ -71,4 +73,10 @@ class FurnitureSimImageFeature(FurnitureSimEnv):
             image1 = image1.detach().cpu().numpy()
             image2 = image2.detach().cpu().numpy()
 
-        return dict(robot_state=robot_state, image1=image1, image2=image2)
+        ret = dict(robot_state=robot_state, image1=image1, image2=image2)
+
+        if self.include_raw_image:
+            ret["color_image1"] = obs["color_image1"].squeeze()
+            ret["color_image2"] = obs["color_image2"].squeeze()
+
+        return ret

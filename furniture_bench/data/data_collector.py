@@ -137,12 +137,13 @@ class DataCollector:
             to["color_image2"] = resize_crop(from_["color_image2"])
 
         if self.obs_type in ["state", "full"]:
-            to["robot_state"] = from_["robot_state"]
             to["parts_poses"] = from_["parts_poses"]
 
         if self.obs_type == "feature":
             to["image1"] = from_["image1"]
             to["image2"] = from_["image2"]
+
+        to["robot_state"] = from_["robot_state"]
 
     def collect(self):
         self.verbose_print("[data collection] Start collecting the data!")
