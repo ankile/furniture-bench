@@ -58,16 +58,16 @@ class FurnitureSimImageFeature(FurnitureSimEnv):
             obs["robot_state"] = filter_and_concat_robot_state(obs["robot_state"])
 
         robot_state = obs["robot_state"].squeeze()
-        image1 = obs["color_image1"].squeeze()
-        image2 = obs["color_image2"].squeeze()
+        image1_raw = obs["color_image1"].squeeze()
+        image2_raw = obs["color_image2"].squeeze()
 
-        image1 = np.moveaxis(resize(np.moveaxis(image1, 0, -1)), -1, 0)
-        crop_image2 = resize_crop(np.moveaxis(image2, 0, -1))
-        image2 = np.moveaxis(crop_image2, -1, 0)
+        image1_raw = np.moveaxis(resize(np.moveaxis(image1_raw, 0, -1)), -1, 0)
+        crop_image2 = resize_crop(np.moveaxis(image2_raw, 0, -1))
+        image2_raw = np.moveaxis(crop_image2, -1, 0)
 
         with torch.no_grad():
-            image1 = torch.tensor(image1, device=self.device)
-            image2 = torch.tensor(image2, device=self.device)
+            image1 = torch.tensor(image1_raw, device=self.device)
+            image2 = torch.tensor(image2_raw, device=self.device)
             image1 = self.layer(image1.unsqueeze(0)).squeeze()
             image2 = self.layer(image2.unsqueeze(0)).squeeze()
             image1 = image1.detach().cpu().numpy()
@@ -76,7 +76,7 @@ class FurnitureSimImageFeature(FurnitureSimEnv):
         ret = dict(robot_state=robot_state, image1=image1, image2=image2)
 
         if self.include_raw_image:
-            ret["color_image1"] = obs["color_image1"].squeeze()
-            ret["color_image2"] = obs["color_image2"].squeeze()
+            ret["color_image1"] = image1_raw
+            ret["color_image2"] = image2_raw
 
         return ret

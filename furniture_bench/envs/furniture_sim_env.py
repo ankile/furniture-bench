@@ -163,7 +163,7 @@ class FurnitureSimEnv(gym.Env):
 
         self.init_ee_pos, self.init_ee_quat = self.get_ee_pose()
 
-        gym.logger.set_level(gym.logger.INFO)
+        gym.logger.set_level(gym.logger.ERROR)
 
         self.record = record
         if self.record:
