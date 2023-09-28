@@ -37,17 +37,17 @@ class VIP(nn.Module):
         ## Visual Encoder
         if size == 18:
             self.outdim = 512
-            self.convnet = torchvision.models.resnet18(pretrained=False)
+            self.convnet = torchvision.models.resnet18(weights=False)
         elif size == 34:
             self.outdim = 512
-            self.convnet = torchvision.models.resnet34(pretrained=False)
+            self.convnet = torchvision.models.resnet34(weights=False)
         elif size == 50:
             self.outdim = 2048
-            self.convnet = torchvision.models.resnet50(pretrained=False)
+            self.convnet = torchvision.models.resnet50(weights=False)
         elif size == 0:
             from transformers import AutoConfig
             self.outdim = 768
-            self.convnet = AutoModel.from_config(config = AutoConfig.from_pretrained('google/vit-base-patch32-224-in21k')).to(self.device)
+            self.convnet = AutoModel.from_config(config=AutoConfig.from_pretrained('google/vit-base-patch32-224-in21k')).to(self.device)
 
         if self.size == 0:
             self.normlayer = transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
@@ -62,10 +62,10 @@ class VIP(nn.Module):
         params += list(self.convnet.parameters())        
 
         ## Optimizer
-        self.encoder_opt = torch.optim.Adam(params, lr = lr)
+        self.encoder_opt = torch.optim.Adam(params, lr=lr)
 
     ## Forward Call (im --> representation)
-    def forward(self, obs, obs_shape = [3, 224, 224]):
+    def forward(self, obs, obs_shape=[3, 224, 224]):
         obs_shape = obs.shape[1:]
         # if not already resized and cropped, then add those in preprocessing
         if obs_shape != [3, 224, 224]:
