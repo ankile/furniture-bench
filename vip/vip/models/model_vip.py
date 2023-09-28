@@ -15,8 +15,19 @@ from pathlib import Path
 from torchvision.utils import save_image
 import torchvision.transforms as T
 
+
 class VIP(nn.Module):
-    def __init__(self, device="cuda", lr=1e-4, hidden_dim=1024, size=50, l2weight=1.0, l1weight=1.0, gamma=0.98, num_negatives=0):
+    def __init__(
+        self,
+        device="cuda",
+        lr=1e-4,
+        hidden_dim=1024,
+        size=50,
+        l2weight=1.0,
+        l1weight=1.0,
+        gamma=0.98,
+        num_negatives=0,
+    ):
         super().__init__()
         self.device = device
         self.l2weight = l2weight
@@ -24,7 +35,7 @@ class VIP(nn.Module):
 
         self.hidden_dim = hidden_dim
         self.gamma = gamma
-        self.size = size # Resnet size
+        self.size = size  # Resnet size
         self.num_negatives = num_negatives
 
         ## Distances and Metrics
@@ -46,20 +57,27 @@ class VIP(nn.Module):
             self.convnet = torchvision.models.resnet50()
         elif size == 0:
             from transformers import AutoConfig
+
             self.outdim = 768
-            self.convnet = AutoModel.from_config(config=AutoConfig.from_pretrained('google/vit-base-patch32-224-in21k')).to(self.device)
+            self.convnet = AutoModel.from_config(
+                config=AutoConfig.from_pretrained("google/vit-base-patch32-224-in21k")
+            ).to(self.device)
 
         if self.size == 0:
-            self.normlayer = transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
+            self.normlayer = transforms.Normalize(
+                mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]
+            )
         else:
-            self.normlayer = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+            self.normlayer = transforms.Normalize(
+                mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
+            )
 
-        if hidden_dim  > 0:
+        if hidden_dim > 0:
             self.convnet.fc = nn.Linear(self.outdim, hidden_dim)
         else:
             self.convnet.fc = Identity()
         self.convnet.train()
-        params += list(self.convnet.parameters())        
+        params += list(self.convnet.parameters())
 
         ## Optimizer
         self.encoder_opt = torch.optim.Adam(params, lr=lr)
@@ -70,21 +88,20 @@ class VIP(nn.Module):
         # if not already resized and cropped, then add those in preprocessing
         if obs_shape != [3, 224, 224]:
             preprocess = nn.Sequential(
-                        transforms.Resize(256),
-                        transforms.CenterCrop(224),
-                        self.normlayer,
-                )
+                transforms.Resize(256, antialias=True),
+                transforms.CenterCrop(224),
+                self.normlayer,
+            )
         else:
             preprocess = nn.Sequential(
-                        self.normlayer,
-                )
+                self.normlayer,
+            )
         ## Input must be [0, 255], [3,224,224]
-        obs = obs.float() /  255.0
+        obs = obs.float() / 255.0
         obs_p = preprocess(obs)
         h = self.convnet(obs_p)
         return h
 
     def sim(self, tensor1, tensor2):
-        d = -torch.linalg.norm(tensor1 - tensor2, dim = -1)
+        d = -torch.linalg.norm(tensor1 - tensor2, dim=-1)
         return d
-    

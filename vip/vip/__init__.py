@@ -24,25 +24,26 @@ VALID_ARGS = [
     "l1weight",
     "num_negatives",
 ]
-if torch.cuda.is_available():
-    device = "cuda"
-else:
-    device = "cpu"
+# if torch.cuda.is_available():
+#     device = "cuda"
+# else:
+#     device = "cpu"
 
 
-def cleanup_config(cfg):
+def cleanup_config(cfg, device_id):
     config = copy.deepcopy(cfg)
     keys = config.agent.keys()
     for key in list(keys):
         if key not in VALID_ARGS:
             del config.agent[key]
     config.agent["_target_"] = "vip.VIP"
-    config["device"] = device
+    config["device"] = f"cuda:{device_id}"
 
     return config.agent
 
 
 def load_vip(modelid="resnet50", device_id=0):
+    device = torch.device(device=device_id)
     home = os.path.join(expanduser("~"), ".vip")
 
     if not os.path.exists(os.path.join(home, modelid)):
@@ -76,9 +77,9 @@ def load_vip(modelid="resnet50", device_id=0):
             gdown.download(configurl, configpath, quiet=False)
 
     modelcfg = omegaconf.OmegaConf.load(configpath)
-    cleancfg = cleanup_config(modelcfg)
+    cleancfg = cleanup_config(modelcfg, device_id)
     rep = hydra.utils.instantiate(cleancfg)
     rep = torch.nn.DataParallel(rep, device_ids=[device_id])
-    vip_state_dict = torch.load(modelpath, map_location=torch.device(device))["vip"]
+    vip_state_dict = torch.load(modelpath, map_location=device)["vip"]
     rep.load_state_dict(vip_state_dict)
     return rep
