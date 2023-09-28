@@ -11,12 +11,13 @@ from furniture_bench.robot.robot_state import filter_and_concat_robot_state
 
 
 class FurnitureSimImageFeature(FurnitureSimEnv):
-    def __init__(self, encoder_type, include_raw_images=False, **kwargs):
+    def __init__(self, encoder_type, include_raw_images=False, compute_device_id=0, **kwargs):
         super().__init__(
             concat_robot_state=True,
             resize_img=False,
             np_step_out=True,
             channel_first=True,
+            compute_device_id=compute_device_id,
             **kwargs,
         )
 
@@ -30,7 +31,7 @@ class FurnitureSimImageFeature(FurnitureSimEnv):
         elif encoder_type == "vip":
             from vip import load_vip
 
-            self.layer = load_vip()
+            self.layer = load_vip(device_id=compute_device_id)
             self.embedding_dim = 1024
         self.layer.requires_grad_(False)
         self.layer.eval()

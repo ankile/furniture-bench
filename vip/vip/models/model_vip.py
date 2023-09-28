@@ -29,7 +29,7 @@ class VIP(nn.Module):
 
         ## Distances and Metrics
         self.cs = torch.nn.CosineSimilarity(1)
-        self.bce = nn.BCELoss(reduce=False)
+        self.bce = nn.BCELoss(reduction="none")
         self.sigm = Sigmoid()
 
         params = []
@@ -37,13 +37,13 @@ class VIP(nn.Module):
         ## Visual Encoder
         if size == 18:
             self.outdim = 512
-            self.convnet = torchvision.models.resnet18(weights=False)
+            self.convnet = torchvision.models.resnet18()
         elif size == 34:
             self.outdim = 512
-            self.convnet = torchvision.models.resnet34(weights=False)
+            self.convnet = torchvision.models.resnet34()
         elif size == 50:
             self.outdim = 2048
-            self.convnet = torchvision.models.resnet50(weights=False)
+            self.convnet = torchvision.models.resnet50()
         elif size == 0:
             from transformers import AutoConfig
             self.outdim = 768
