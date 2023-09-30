@@ -96,7 +96,7 @@ class VIP(nn.Module):
             preprocess = nn.Sequential(
                 self.normlayer,
             )
-        ## Input must be [0, 255], [3,224,224]
+        ## Input must be [0, 255], [3, 224, 224]
         obs = obs.float() / 255.0
         obs_p = preprocess(obs)
         h = self.convnet(obs_p)

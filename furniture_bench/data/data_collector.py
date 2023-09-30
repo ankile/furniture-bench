@@ -62,6 +62,7 @@ class DataCollector:
             sim_type = dict(
                 state="FurnitureSimState-v0",
                 full="FurnitureSimFull-v0",
+                image="FurnitureSimFull-v0",
                 feature="FurnitureSimImageFeature-v0",
             )[obs_type]
 
