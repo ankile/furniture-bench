@@ -42,8 +42,7 @@ def cleanup_config(cfg, device_id):
     return config.agent
 
 
-def load_vip(modelid="resnet50", device_id=0):
-    device = torch.device(device=device_id)
+def load_vip(modelid="resnet50", device="cuda"):
     home = os.path.join(expanduser("~"), ".vip")
 
     if not os.path.exists(os.path.join(home, modelid)):
@@ -77,9 +76,9 @@ def load_vip(modelid="resnet50", device_id=0):
             gdown.download(configurl, configpath, quiet=False)
 
     modelcfg = omegaconf.OmegaConf.load(configpath)
-    cleancfg = cleanup_config(modelcfg, device_id)
+    cleancfg = cleanup_config(modelcfg, device)
     rep = hydra.utils.instantiate(cleancfg)
-    rep = torch.nn.DataParallel(rep, device_ids=[device_id])
+    rep = torch.nn.DataParallel(rep, device_ids=[device])
     vip_state_dict = torch.load(modelpath, map_location=device)["vip"]
     rep.load_state_dict(vip_state_dict)
     return rep

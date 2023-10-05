@@ -8,10 +8,13 @@ from furniture_bench.envs.furniture_sim_env import FurnitureSimEnv
 
 from furniture_bench.perception.image_utils import resize, resize_crop
 from furniture_bench.robot.robot_state import filter_and_concat_robot_state
+from src.models.vision import DinoEncoder
 
 
 class FurnitureSimImageFeature(FurnitureSimEnv):
-    def __init__(self, encoder_type, include_raw_images=False, compute_device_id=0, **kwargs):
+    def __init__(
+        self, encoder_type, include_raw_images=False, compute_device_id=0, **kwargs
+    ):
         super().__init__(
             concat_robot_state=True,
             resize_img=False,
@@ -31,8 +34,15 @@ class FurnitureSimImageFeature(FurnitureSimEnv):
         elif encoder_type == "vip":
             from vip import load_vip
 
-            self.layer = load_vip(device_id=compute_device_id)
+            self.layer = load_vip(device=compute_device_id)
             self.embedding_dim = 1024
+        elif encoder_type == "dinov2-base":
+            self.layer = DinoEncoder(size="base", freeze=True, device=self.device)
+            self.embedding_dim = self.layer.encoding_dim
+
+        else:
+            raise ValueError(f"Unknown encoder type: {encoder_type}")
+
         self.layer.requires_grad_(False)
         self.layer.eval()
 

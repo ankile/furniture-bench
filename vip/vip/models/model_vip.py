@@ -27,6 +27,7 @@ class VIP(nn.Module):
         l1weight=1.0,
         gamma=0.98,
         num_negatives=0,
+        dtype=torch.float32,
     ):
         super().__init__()
         self.device = device
@@ -42,6 +43,7 @@ class VIP(nn.Module):
         self.cs = torch.nn.CosineSimilarity(1)
         self.bce = nn.BCELoss(reduction="none")
         self.sigm = Sigmoid()
+        self.dtype = dtype
 
         params = []
         ######################################################################## Sub Modules
@@ -97,7 +99,7 @@ class VIP(nn.Module):
                 self.normlayer,
             )
         ## Input must be [0, 255], [3, 224, 224]
-        obs = obs.float() / 255.0
+        obs = obs.to(self.dtype) / 255.0
         obs_p = preprocess(obs)
         h = self.convnet(obs_p)
         return h
