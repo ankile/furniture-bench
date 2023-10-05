@@ -10,6 +10,8 @@ from furniture_bench.perception.image_utils import resize, resize_crop
 from furniture_bench.robot.robot_state import filter_and_concat_robot_state
 from src.models.vision import DinoEncoder
 
+from ipdb import set_trace as bp
+
 
 class FurnitureSimImageFeature(FurnitureSimEnv):
     def __init__(
@@ -39,7 +41,6 @@ class FurnitureSimImageFeature(FurnitureSimEnv):
         elif encoder_type == "dinov2-base":
             self.layer = DinoEncoder(size="base", freeze=True, device=self.device)
             self.embedding_dim = self.layer.encoding_dim
-
         else:
             raise ValueError(f"Unknown encoder type: {encoder_type}")
 

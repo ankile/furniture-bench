@@ -52,6 +52,12 @@ register(
     entry_point="furniture_bench.envs.policy_envs.furniture_sim_image_feature:FurnitureSimImageFeature",
 )
 
+# FurnitureSim with image feature observations based on a given encoder.
+register(
+    id="FurnitureSimFeature-v0",
+    entry_point="furniture_bench.envs.policy_envs.furniture_sim_image_feature:FurnitureSimFeature",
+)
+
 # FurnitureSim environment with state observations.
 register(
     id="FurnitureSimState-v0",

@@ -69,6 +69,7 @@ class FurnitureSimEnv(gym.Env):
         record: bool = False,
         max_env_steps: int = 3000,
         act_rot_repr: str = "quat",
+        verbose: bool = True,
         **kwargs,
     ):
         """
