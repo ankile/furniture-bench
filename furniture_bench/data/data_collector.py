@@ -9,6 +9,7 @@ import gym
 import torch
 from joblib import Parallel, delayed
 from tqdm import tqdm
+from ipdb import set_trace as st
 
 from furniture_bench.device.device_interface import DeviceInterface
 from furniture_bench.data.collect_enum import CollectEnum
@@ -133,16 +134,17 @@ class DataCollector:
         return v
 
     def _set_dictionary(self, to, from_):
-        if self.obs_type == "full":
+        if self.obs_type in ["full", "image"]:
             to["color_image1"] = resize(from_["color_image1"])
             to["color_image2"] = resize_crop(from_["color_image2"])
+            to["image_size"] = to["color_image2"].shape[:2]
 
         if self.obs_type in ["state", "full"]:
             to["parts_poses"] = from_["parts_poses"]
 
         if self.obs_type == "feature":
-            to["image1"] = from_["image1"]
-            to["image2"] = from_["image2"]
+            to["feature1"] = from_["image1"]
+            to["feature2"] = from_["image2"]
 
         to["robot_state"] = from_["robot_state"]
 
