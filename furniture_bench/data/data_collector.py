@@ -38,6 +38,7 @@ class DataCollector:
         pkl_only: bool = False,
         save_failure: bool = False,
         num_demos: int = 100,
+        resize_img: bool = True,
         verbose: bool = True,
         show_pbar: bool = False,
         obs_type: str = "state",
@@ -120,6 +121,7 @@ class DataCollector:
 
         self.pkl_only = pkl_only
         self.save_failure = save_failure
+        self.resize_img = resize_img
 
         self.verbose = verbose
         self.pbar = None if not show_pbar else tqdm(total=self.num_demos)
@@ -135,8 +137,13 @@ class DataCollector:
 
     def _set_dictionary(self, to, from_):
         if self.obs_type in ["full", "image"]:
-            to["color_image1"] = resize(from_["color_image1"])
-            to["color_image2"] = resize_crop(from_["color_image2"])
+            to["color_image1"] = from_["color_image1"]
+            to["color_image2"] = from_["color_image2"]
+
+            if self.resize_img:
+                to["color_image1"] = resize(to["color_image1"])
+                to["color_image2"] = resize_crop(to["color_image2"])
+
             to["image_size"] = to["color_image2"].shape[:2]
 
         if self.obs_type in ["state", "full"]:
