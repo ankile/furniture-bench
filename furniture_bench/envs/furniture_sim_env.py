@@ -44,6 +44,32 @@ from furniture_bench.furniture.parts.part import Part
 from ipdb import set_trace as bp
 
 
+from sim_web_visualizer.isaac_visualizer_client import bind_visualizer_to_gym, set_gpu_pipeline
+import meshcat
+
+def wrapped_create_sim(
+        gym_interface, 
+	compute_device_id: int, 
+	graphics_device_id: int, 
+	physics_engine, 
+	sim_params: gymapi.SimParams):
+    sim = gym_interface.create_sim(
+	compute_device_id,
+	graphics_device_id,
+	physics_engine, #gymapi.SimType.SIM_PHYSX,
+	sim_params,
+    )
+
+    if sim is None:
+        print("*** Failed to create sim")
+        quit()
+
+    gym_interface = bind_visualizer_to_gym(gym_interface, sim)
+    set_gpu_pipeline(sim_params.use_gpu_pipeline)
+
+    return sim, gym_interface
+
+
 ASSET_ROOT = str(Path(__file__).parent.parent.absolute() / "assets")
 
 
@@ -72,6 +98,7 @@ class FurnitureSimEnv(gym.Env):
         max_env_steps: int = 3000,
         act_rot_repr: str = "quat",
         verbose: bool = True,
+        mc_vis: meshcat.Visualizer = None,
         **kwargs,
     ):
         """
@@ -139,12 +166,26 @@ class FurnitureSimEnv(gym.Env):
 
         # Simulator setup.
         self.isaac_gym = gymapi.acquire_gym()
-        self.sim = self.isaac_gym.create_sim(
-            compute_device_id,
-            graphics_device_id,
-            gymapi.SimType.SIM_PHYSX,
-            sim_config["sim_params"],
+        
+        self.mc_vis = mc_vis
+        if mc_vis is None:
+            self.sim = self.isaac_gym.create_sim(
+                compute_device_id,
+                graphics_device_id,
+                gymapi.SimType.SIM_PHYSX,
+                sim_config["sim_params"],
+            )
+        else:
+            # suppose we want to view with meshcat (must make the viewer handle from outside the class)
+            print(f'Using meshcat to visualize (make sure you have run `meshcat-server` in the background)')
+            self.sim, self.isaac_gym = wrapped_create_sim(
+                gym_interface=self.isaac_gym,
+                compute_device_id=compute_device_id,
+                graphics_device_id=graphics_device_id,
+                physics_engine=gymapi.SimType.SIM_PHYSX,
+                sim_params=sim_config["sim_params"],
         )
+
         self._create_ground_plane()
         self._setup_lights()
         self.import_assets()
@@ -656,8 +697,8 @@ class FurnitureSimEnv(gym.Env):
 
             self.isaac_gym.set_dof_actuation_force_tensor(self.sim, gymtorch.unwrap_tensor(torque_action))
 
-            # Update viewer
-            if not self.headless:
+            # Update viewer (suppose if we have the meshcat viewer, we want to draw the scene)
+            if (not self.headless) or (self.mc_vis is not None):
                 self.isaac_gym.draw_viewer(self.viewer, self.sim, False)
                 self.isaac_gym.sync_frame_time(self.sim)
 
