@@ -47,17 +47,15 @@ from ipdb import set_trace as bp
 from sim_web_visualizer.isaac_visualizer_client import bind_visualizer_to_gym, set_gpu_pipeline
 import meshcat
 
+
 def wrapped_create_sim(
-        gym_interface, 
-	compute_device_id: int, 
-	graphics_device_id: int, 
-	physics_engine, 
-	sim_params: gymapi.SimParams):
+    gym_interface, compute_device_id: int, graphics_device_id: int, physics_engine, sim_params: gymapi.SimParams
+):
     sim = gym_interface.create_sim(
-	compute_device_id,
-	graphics_device_id,
-	physics_engine, #gymapi.SimType.SIM_PHYSX,
-	sim_params,
+        compute_device_id,
+        graphics_device_id,
+        physics_engine,  # gymapi.SimType.SIM_PHYSX,
+        sim_params,
     )
 
     if sim is None:
@@ -166,7 +164,7 @@ class FurnitureSimEnv(gym.Env):
 
         # Simulator setup.
         self.isaac_gym = gymapi.acquire_gym()
-        
+
         self.mc_vis = mc_vis
         if mc_vis is None:
             self.sim = self.isaac_gym.create_sim(
@@ -177,14 +175,14 @@ class FurnitureSimEnv(gym.Env):
             )
         else:
             # suppose we want to view with meshcat (must make the viewer handle from outside the class)
-            print(f'Using meshcat to visualize (make sure you have run `meshcat-server` in the background)')
+            print(f"Using meshcat to visualize (make sure you have run `meshcat-server` in the background)")
             self.sim, self.isaac_gym = wrapped_create_sim(
                 gym_interface=self.isaac_gym,
                 compute_device_id=compute_device_id,
                 graphics_device_id=graphics_device_id,
                 physics_engine=gymapi.SimType.SIM_PHYSX,
                 sim_params=sim_config["sim_params"],
-        )
+            )
         self._create_ground_plane()
         self._setup_lights()
         self.import_assets()
@@ -391,16 +389,16 @@ class FurnitureSimEnv(gym.Env):
 
             self.parts_handles = {}
             for part in self.furniture.parts:
-                self.parts_handles[part.name] = self.isaac_gym.find_actor_index(
-                    env, part.name, gymapi.DOMAIN_ENV
-                )
-        
+                self.parts_handles[part.name] = self.isaac_gym.find_actor_index(env, part.name, gymapi.DOMAIN_ENV)
+
         # print(f'Getting the separate actor indices for the frankas and the furniture parts (not the handles)')
         self.franka_actor_idx_all = []
         self.part_actor_idx_all = []  # global list of indices, when resetting all parts
         self.part_actor_idx_by_env = {}  # allow to access part indices based on environment indices
         for env_idx in range(self.num_envs):
-            self.franka_actor_idx_all.append(self.isaac_gym.find_actor_index(self.envs[env_idx], 'franka', gymapi.DOMAIN_SIM))
+            self.franka_actor_idx_all.append(
+                self.isaac_gym.find_actor_index(self.envs[env_idx], "franka", gymapi.DOMAIN_SIM)
+            )
             self.part_actor_idx_by_env[env_idx] = []
             for part in self.furnitures[env_idx].parts:
                 part_actor_idx = self.isaac_gym.find_actor_index(self.envs[env_idx], part.name, gymapi.DOMAIN_SIM)
@@ -944,21 +942,18 @@ class FurnitureSimEnv(gym.Env):
         return obs
 
     def reset(self):
-
         # can also reset the full set of robots/parts, without applying torques and refreshing
         # self._reset_franka_all()
         # self._reset_parts_all()
         for i in range(self.num_envs):
             # if using ._reset_*_all(), can set reset_franka=False and reset_parts=False in .reset_env
-            self.reset_env(i)  
+            self.reset_env(i)
 
             # apply zero torque across the board and refresh in between each env reset (not needed if using ._reset_*_all())
             torque_action = torch.zeros_like(self.dof_pos)
-            self.isaac_gym.set_dof_actuation_force_tensor(
-                self.sim, gymtorch.unwrap_tensor(torque_action)
-            )
+            self.isaac_gym.set_dof_actuation_force_tensor(self.sim, gymtorch.unwrap_tensor(torque_action))
             self.refresh()
-        
+
         self.furniture.reset()
 
         self.refresh()
@@ -997,7 +992,7 @@ class FurnitureSimEnv(gym.Env):
             self.furnitures[env_idx].randomize_init_pose(self.from_skill)
         elif self.randomness == Randomness.HIGH:
             self.furnitures[env_idx].randomize_high(self.high_random_idx)
-        
+
         if reset_franka:
             self._reset_franka(env_idx)
         if reset_parts:
@@ -1054,19 +1049,13 @@ class FurnitureSimEnv(gym.Env):
         # Low randomness only.
         if self.from_skill >= 1:
             dof_pos = torch.from_numpy(self.default_dof_pos)
-            ee_pos = torch.from_numpy(
-                self.furniture.furniture_conf["ee_pos"][self.from_skill]
-            )
-            ee_quat = torch.from_numpy(
-                self.furniture.furniture_conf["ee_quat"][self.from_skill]
-            )
+            ee_pos = torch.from_numpy(self.furniture.furniture_conf["ee_pos"][self.from_skill])
+            ee_quat = torch.from_numpy(self.furniture.furniture_conf["ee_quat"][self.from_skill])
             dof_pos = self.robot_model.inverse_kinematics(ee_pos, ee_quat)
         else:
             dof_pos = self.default_dof_pos if dof_pos is None else dof_pos
 
-        self.dof_pos[:, 0 : self.franka_num_dofs] = torch.tensor(
-            dof_pos, device=self.device, dtype=torch.float32
-        )
+        self.dof_pos[:, 0 : self.franka_num_dofs] = torch.tensor(dof_pos, device=self.device, dtype=torch.float32)
         self.dof_vel[:, 0 : self.franka_num_dofs] = torch.tensor(
             [0] * len(self.default_dof_pos), device=self.device, dtype=torch.float32
         )
@@ -1136,17 +1125,13 @@ class FurnitureSimEnv(gym.Env):
                     part_pose = parts_poses[part_idx * 7 : (part_idx + 1) * 7]
 
                     pos = part_pose[:3]
-                    ori = T.to_homogeneous(
-                        [0, 0, 0], T.quat2mat(part_pose[3:])
-                    )  # Dummy zero position.
+                    ori = T.to_homogeneous([0, 0, 0], T.quat2mat(part_pose[3:]))  # Dummy zero position.
                 else:
                     pos, ori = self._get_reset_pose(part)
 
                 part_pose_mat = self.april_coord_to_sim_coord(get_mat(pos, [0, 0, 0]))
                 part_pose = gymapi.Transform()
-                part_pose.p = gymapi.Vec3(
-                    part_pose_mat[0, 3], part_pose_mat[1, 3], part_pose_mat[2, 3]
-                )
+                part_pose.p = gymapi.Vec3(part_pose_mat[0, 3], part_pose_mat[1, 3], part_pose_mat[2, 3])
                 reset_ori = self.april_coord_to_sim_coord(ori)
                 part_pose.r = gymapi.Quat(*T.mat2quat(reset_ori[:3, :3]))
                 idxs = self.parts_handles[part.name]

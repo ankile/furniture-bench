@@ -38,7 +38,8 @@ class DataCollector:
         pkl_only: bool = False,
         save_failure: bool = False,
         num_demos: int = 100,
-        resize_img: bool = True,
+        resize_img_after_sim: bool = True,
+        small_sim_img_size: bool = False,
         verbose: bool = True,
         show_pbar: bool = False,
         obs_type: str = "state",
@@ -77,10 +78,11 @@ class DataCollector:
                 randomness=randomness,
                 compute_device_id=gpu_id,
                 graphics_device_id=gpu_id,
+                resize_img=small_sim_img_size,
             )
             if obs_type != "feature":
                 kwargs.update(
-                    resize_img=False,
+                    resize_img=small_sim_img_size,
                     np_step_out=False,  # Always output Tensor in this setting. Will change to numpy in this code.
                     channel_first=False,
                 )
@@ -121,7 +123,7 @@ class DataCollector:
 
         self.pkl_only = pkl_only
         self.save_failure = save_failure
-        self.resize_img = resize_img
+        self.resize_img_after_sim = resize_img_after_sim
 
         self.verbose = verbose
         self.pbar = None if not show_pbar else tqdm(total=self.num_demos)
@@ -140,7 +142,7 @@ class DataCollector:
             to["color_image1"] = from_["color_image1"]
             to["color_image2"] = from_["color_image2"]
 
-            if self.resize_img:
+            if self.resize_img_after_sim:
                 to["color_image1"] = resize(to["color_image1"])
                 to["color_image2"] = resize_crop(to["color_image2"])
 
@@ -201,9 +203,7 @@ class DataCollector:
                         collect_enum = CollectEnum.FAIL
                         obs = self.save_and_reset(collect_enum, {})
                     else:
-                        self.verbose_print(
-                            "Failed to assemble the furniture, reset without saving."
-                        )
+                        self.verbose_print("Failed to assemble the furniture, reset without saving.")
                         obs = self.reset()
                         collect_enum = CollectEnum.SUCCESS
                     self.num_fail += 1
@@ -216,9 +216,7 @@ class DataCollector:
                     self.update_pbar()
 
                 self.traj_counter += 1
-                self.verbose_print(
-                    f"Success: {self.num_success}, Fail: {self.num_fail}"
-                )
+                self.verbose_print(f"Success: {self.num_success}, Fail: {self.num_fail}")
                 done = False
                 continue
 
@@ -230,9 +228,7 @@ class DataCollector:
 
             # Label reward.
             if collect_enum == CollectEnum.REWARD:
-                rew = self.env.furniture.manual_assemble_label(
-                    self.device_interface.rew_key
-                )
+                rew = self.env.furniture.manual_assemble_label(self.device_interface.rew_key)
                 if rew == 0:
                     # Correction the label.
                     self.rews[self.last_reward_idx] = 0
@@ -281,9 +277,7 @@ class DataCollector:
                 self.skills.append(skill_complete)
             obs = next_obs
 
-        self.verbose_print(
-            f"Collected {self.traj_counter} / {self.num_demos} successful trajectories!"
-        )
+        self.verbose_print(f"Collected {self.traj_counter} / {self.num_demos} successful trajectories!")
 
     def save_and_reset(self, collect_enum: CollectEnum, info):
         """Saves the collected data and reset the environment."""
