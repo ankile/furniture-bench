@@ -925,15 +925,10 @@ class FurnitureSimEnv(gym.Env):
     def init_ctrl(self):
         # Positional and velocity gains for robot control.
         kp = torch.tensor(sim_config["robot"]["kp"], device=self.device)
-        # kv = (
-        #     torch.tensor(sim_config["robot"]["kv"], device=self.device)
-        #     if sim_config["robot"]["kv"] is not None
-        #     else torch.sqrt(kp) * 2.0
-        # )
         kv = (
             torch.tensor(sim_config["robot"]["kv"], device=self.device)
             if sim_config["robot"]["kv"] is not None
-            else torch.sqrt(kp) * 0.1
+            else torch.sqrt(kp) * 2.0
         )
 
         ee_pos, ee_quat = self.get_ee_pose()
@@ -953,19 +948,7 @@ class FurnitureSimEnv(gym.Env):
                 )
             )
             
-            self.diffik_ctrls.append(
-                diffik_factory(
-                    real_robot=False,
-                    ee_pos_current=ee_pos[env_idx],
-                    ee_quat_current=ee_quat[env_idx],
-                    init_joints=torch.tensor(config["robot"]["reset_joints"], device=self.device),
-                    kp=kp,
-                    kv=kv,
-                    mass_matrix_offset_val=[0.0, 0.0, 0.0],
-                    position_limits=torch.tensor(config["robot"]["position_limits"], device=self.device),
-                    joint_kp=10,
-                )
-            )
+            self.diffik_ctrls.append(diffik_factory(real_robot=False))
         self.ctrl_started = True
 
     def get_ee_pose(self):
