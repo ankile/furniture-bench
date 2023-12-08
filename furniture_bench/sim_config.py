@@ -44,6 +44,8 @@ sim_config["robot"].update(
         ],  # Default arm friction.
         "gripper_frictions": [15.0, 15.0],  # Default gripper friction.
         "gripper_torque": 13,  # Default torque for gripper.
+        "gripper_open": 0.08,  # open pos
+        "gripper_closed": 0.0,  # close pos
     }
 )
 

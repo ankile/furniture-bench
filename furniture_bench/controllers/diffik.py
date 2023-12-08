@@ -1,13 +1,13 @@
-"""Code derived from https://github.com/StanfordVL/perls2 and https://github.com/ARISE-Initiative/robomimic"""
 import math
 from typing import Dict, List
 
 import torch
+from scipy.spatial.transform import Rotation as R
 
 import furniture_bench.controllers.control_utils as C
 
 
-def osc_factory(real_robot=True, *args, **kwargs):
+def diffik_factory(real_robot=True, *args, **kwargs):
     if real_robot:
         import torchcontrol as toco
 
@@ -15,8 +15,8 @@ def osc_factory(real_robot=True, *args, **kwargs):
     else:
         base = torch.nn.Module
 
-    class OSCController(base):
-        """Operational Space Control"""
+    class DiffIKController(base):
+        """Differential Inverse Kinematics Controller"""
 
         def __init__(
             self,
@@ -33,7 +33,7 @@ def osc_factory(real_robot=True, *args, **kwargs):
             ramp_ratio: float = 1,
             joint_kp: float = 10.0,
         ):
-            """Initialize EE Impedance Controller.
+            """Initialize Differential Inverse Kinematics Controller.
 
             Args:
                 kp (torch.Tensor): positional gain for determining desired torques based upon the pos / ori errors.
@@ -62,8 +62,15 @@ def osc_factory(real_robot=True, *args, **kwargs):
             self.kv = kv
             self.init_joints = init_joints
 
-            self.ee_pos_desired = torch.nn.Parameter(ee_pos_current)
-            self.ee_quat_desired = torch.nn.Parameter(ee_quat_current)
+            # self.ee_pos_desired = torch.nn.Parameter(ee_pos_current)
+            # self.ee_quat_desired = torch.nn.Parameter(ee_quat_current)
+            self.ee_pos_desired = None
+            self.ee_quat_desired = None
+            self.ee_pos_error = None
+            self.ee_rot_error = None
+
+            self.pos_scalar = 3.0
+            self.rot_scalar = 10.0
 
             # self.mass_matrix = torch.zeros((7, 7))
             self.mass_matrix_offset_val = mass_matrix_offset_val
@@ -92,79 +99,94 @@ def osc_factory(real_robot=True, *args, **kwargs):
 
             self.joint_kp = joint_kp
 
-        def forward(
-            self, state_dict: Dict[str, torch.Tensor]
-        ) -> Dict[str, torch.Tensor]:
-            self.repeated_torques_counter = (
-                self.repeated_torques_counter + 1
-            ) % self.num_repeated_torques
-            if self.repeated_torques_counter != 1:
-                return {"joint_torques": self.prev_torques}
+        def forward(self, state_dict: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+            # self.repeated_torques_counter = (self.repeated_torques_counter + 1) % self.num_repeated_torques
+            # if self.repeated_torques_counter != 1:
+            #     return {"joint_torques": self.prev_torques}
+
             # Get states.
             joint_pos_current = state_dict["joint_positions"]
             joint_vel_current = state_dict["joint_velocities"]
-
-            mass_matrix = state_dict["mass_matrix"].reshape(7, 7).t()
-            mass_matrix[4, 4] += self.mass_matrix_offset_val[0]
-            mass_matrix[5, 5] += self.mass_matrix_offset_val[1]
-            mass_matrix[6, 6] += self.mass_matrix_offset_val[2]
 
             ee_pose = state_dict["ee_pose"].reshape(4, 4).t().contiguous()
             ee_pos, ee_quat = C.mat2pose(ee_pose)
             ee_pos = ee_pos.to(ee_pose.device)
             ee_quat = ee_quat.to(ee_pose.device)
 
-            jacobian = state_dict["jacobian_osc"].reshape(7, 6).t().contiguous()
+            # 6x7
+            jacobian = state_dict["jacobian_diffik"]
 
-            ee_twist_current = jacobian @ joint_vel_current
-            ee_pos_vel = ee_twist_current[:3]
-            ee_ori_vel = ee_twist_current[3:]
+            if False:
+                # print(f'Pos: {ee_pos}, Pos (des): {self.ee_pos_desired}')
+                # print(f'Ori: {ee_quat}, Ori (des): {self.ee_quat_desired}')
 
-            goal_pos = C.set_goal_position(self.position_limits, self.ee_pos_desired)
-            goal_ori = self.ee_quat_desired
-            # Setting goal_pos, goal_ori.
-            self.set_goal(goal_pos, goal_ori)
-            goal_pos = self.get_interpolated_goal_pos()
-            goal_ori = self.get_interpolated_goal_ori()
+                # ee_pos_desired = ee_pos
+                ee_pos_desired = self.ee_pos_desired
+                # ee_pos_desired = C.set_goal_position(self.position_limits, self.ee_pos_desired)
+                ee_quat_desired = self.ee_quat_desired  
 
-            goal_ori_mat = C.quat2mat(goal_ori).to(goal_ori.device)
-            ee_ori_mat = C.quat2mat(ee_quat).to(ee_quat.device)
+                # Setting goal_pos, goal_ori.
+                # self.set_goal(ee_pos_desired, ee_quat_desired)
+                # ee_pos_desired = self.get_interpolated_goal_pos()
+                # ee_quat_desired = self.get_interpolated_goal_ori()
 
-            # Default desired velocities and accelerations are zero.
-            ori_error = C.orientation_error(goal_ori_mat, ee_ori_mat)
+                # Calculate desired force, torque at ee using control law and error.
+                position_error = ee_pos_desired - ee_pos
 
-            # Calculate desired force, torque at ee using control law and error.
-            position_error = goal_pos - ee_pos
-            vel_pos_error = -ee_pos_vel
-            desired_force = torch.multiply(
-                position_error, self.kp[0:3]
-            ) + torch.multiply(vel_pos_error, self.kv[0:3])
+            position_error = self.ee_pos_error
+            rot_error = self.ee_rot_error
 
-            vel_ori_error = -ee_ori_vel
-            desired_torque = torch.multiply(ori_error, self.kp[3:]) + torch.multiply(
-                vel_ori_error, self.kv[3:]
-            )
+            # goal_ori_mat = C.quat2mat(ee_quat_desired).to(ee_quat_desired.device)
+            # ee_ori_mat = C.quat2mat(ee_quat).to(ee_quat.device)
+            # ee_delta_quat = C.mat2quat(goal_ori_mat @ torch.inverse(ee_ori_mat))
+            # ee_delta_quat = C.orientation_error_quat_flat(ee_quat_desired, ee_quat)
+            # ee_delta_axis_angle = C.quaternion_to_axis_angle(ee_delta_quat) 
 
-            # Calculate Operational Space mass matrix.
-            lambda_full, nullspace_matrix = C.opspace_matrices(mass_matrix, jacobian)
+            # print(f'Pos error: {position_error}')
+            # print(f'Ori error: {ee_delta_axis_angle}')
 
-            desired_wrench = torch.cat([desired_force, desired_torque])
-            decoupled_wrench = torch.matmul(lambda_full, desired_wrench)
+            ee_delta_axis_angle = torch.from_numpy(rot_error.as_rotvec()).float().to(position_error.device)
 
-            # Project torques that acheive goal into task space.
-            torques = torch.matmul(jacobian.T, decoupled_wrench) + C.nullspace_torques(
-                mass_matrix,
-                nullspace_matrix,
-                self.init_joints,
-                joint_pos_current,
-                joint_vel_current,
-                joint_kp=self.joint_kp,
-            )
+            # dt = 0.01
+            dt = 1.0
+            ee_pos_vel = position_error * self.pos_scalar / dt
+            ee_rot_vel = ee_delta_axis_angle * self.rot_scalar / dt
+            # ee_rot_vel = torch.zeros(3).float().to(ee_quat.device)
+            # print(f'position_error: {position_error}')
+            # print(f'ee_delta_axis_angle: {ee_delta_axis_angle}')
+            # print(f'ee_rot_vel: {ee_rot_vel}')
 
-            self._torque_offset(ee_pos, goal_pos, torques)
-            self.prev_torques = torques
+            ee_velocity_desired = torch.cat((ee_pos_vel, ee_rot_vel), dim=-1)
+            # print(f'ee_velocity_desired: {ee_velocity_desired.shape}')
+            # print(f'Here to confirm we can compute IK')
+            # from IPython import embed; embed()
+            joint_vel_desired = torch.linalg.lstsq(jacobian, ee_velocity_desired).solution
+            # print(f'ee_velocity_desired: {ee_velocity_desired}')
+            # print(f'joint_vel_desired: {joint_vel_desired}')
+            joint_pos_desired = joint_pos_current + joint_vel_desired*dt
 
-            return {"joint_torques": torques}
+            # print(f'joint_pos_desired: {joint_pos_desired}')
+            # print(f'joint_pos_current: {joint_pos_current}')
+            
+            if False:
+                torque_feedback = (
+                    torch.multiply(self.kp, (joint_pos_desired - joint_pos_current)) - 
+                    torch.multiply(self.kv, joint_vel_current)
+                )
+
+                # torque_feedback = torch.multiply(self.kp, (joint_pos_desired - joint_pos_current))
+
+                # torque_feedforward = self.invdyn(joint_pos_current, joint_vel_current, torch.zeros_like(joint_pos_current))
+                torque_feedforward = torch.zeros_like(torque_feedback)
+                torques = torque_feedback + torque_feedforward
+                # torques = torch.zeros(7).float().to(ee_quat.device)
+                self.prev_torques = torques
+            # self._torque_offset(ee_pos, goal_pos, torques)
+        
+            # print(f'torques: {torques}')
+
+            # return {"joint_torques": torques}
+            return {"joint_positions": joint_pos_desired}
 
         def set_goal(self, goal_pos, goal_ori):
             if (
@@ -225,4 +247,5 @@ def osc_factory(real_robot=True, *args, **kwargs):
         def reset(self):
             self.repeated_torques_counter = 0
 
-    return OSCController(*args, **kwargs)
+    return DiffIKController(*args, **kwargs)
+
