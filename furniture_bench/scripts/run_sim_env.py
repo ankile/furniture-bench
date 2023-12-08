@@ -75,7 +75,14 @@ def main():
     )
 
     parser.add_argument("--num-envs", type=int, default=1)
+    parser.add_argument("-m", "--meshcat", action="store_true", help="Whether or not to use meshcat")
+    parser.add_argument("-p", "--port", type=int, default=6000, help="What meshcat port to use")
     args = parser.parse_args()
+
+    mc_vis = None
+    if args.meshcat:
+        from sim_web_visualizer.isaac_visualizer_client import create_isaac_visualizer
+        mc_vis = create_isaac_visualizer(port=args.port, host="localhost", keep_default_viewer=False, max_env=4)
 
     # Create FurnitureSim environment.
     env = gym.make(
@@ -83,6 +90,8 @@ def main():
         furniture=args.furniture,
         num_envs=args.num_envs,
         resize_img=not args.high_res,
+        compute_device_id=0,
+        graphics_device_id=0,
         init_assembled=args.init_assembled,
         record=args.record,
         headless=args.headless,
@@ -90,6 +99,7 @@ def main():
         randomness=args.randomness,
         high_random_idx=args.high_random_idx,
         act_rot_repr=args.act_rot_repr,
+        mc_vis=mc_vis
     )
 
     # Initialize FurnitureSim.
