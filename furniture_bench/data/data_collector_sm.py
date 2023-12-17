@@ -236,7 +236,9 @@ class DataCollectorSpaceMouse:
             target_quat_xyzw = torch.from_numpy(dquat_np).float().to(device)
             target_dpose = torch.cat((target_translation, target_quat_xyzw, grasp_flag), dim=-1).reshape(1, -1)
             return target_dpose
-        
+
+        ready_to_grasp = True 
+        steps_since_grasp = 0
         with SharedMemoryManager() as shm_manager:
             with Spacemouse(shm_manager=shm_manager, deadzone=args.deadzone) as sm:
                 t_start = time.monotonic()
@@ -264,10 +266,17 @@ class DataCollectorSpaceMouse:
                     drot_xyz = sm_state[3:] * (args.max_rot_speed / frequency)
                     drot = st.Rotation.from_euler("xyz", drot_xyz)
 
-                    if sm.is_button_pressed(0) or sm.is_button_pressed(1):
+                    steps_since_grasp += 1
+                    if steps_since_grasp > 10:
+                        ready_to_grasp = True
+
+                    if (sm.is_button_pressed(0) or sm.is_button_pressed(1)) and ready_to_grasp:
                         # env.gripper_close() if gripper_open else env.gripper_open()
                         grasp_flag = -1 * grasp_flag
                         gripper_open = not gripper_open
+
+                        ready_to_grasp = False
+                        steps_since_grasp = 0
 
                     # new_target_pose = target_pose.copy()
                     # new_target_pose[:3] += dpos
@@ -327,7 +336,11 @@ class DataCollectorSpaceMouse:
 
                         self.traj_counter += 1
                         self.verbose_print(f"Success: {self.num_success}, Fail: {self.num_fail}")
+
                         done = False
+
+                        steps_since_grasp = 0
+                        ready_to_grasp = True
                         continue
 
                     # Execute action.

@@ -326,6 +326,7 @@ class FurnitureSimEnv(gym.Env):
             table_handle = self.isaac_gym.create_actor(env, self.table_asset, table_pose, "table", i, 0)
             table_props = self.isaac_gym.get_actor_rigid_shape_properties(env, table_handle)
             table_props[0].friction = sim_config["table"]["friction"]
+            # table_props[0].rolling_friction = sim_config["table"]["rolling_friction"]
             self.isaac_gym.set_actor_rigid_shape_properties(env, table_handle, table_props)
 
             self.base_tag_pose = gymapi.Transform()
@@ -399,16 +400,15 @@ class FurnitureSimEnv(gym.Env):
                 franka_dof_props["damping"][:7].fill(200.0)
 
             # Grippers
-            if self.ctrl_mode == 'osc':
-                franka_dof_props["driveMode"][7:].fill(gymapi.DOF_MODE_EFFORT)
-                franka_dof_props["stiffness"][7:].fill(0)
-                franka_dof_props["damping"][7:].fill(0)
-                franka_dof_props["friction"][7:] = sim_config["robot"]["gripper_frictions"]
-            else:
-                franka_dof_props["driveMode"][7:].fill(gymapi.DOF_MODE_POS)
-                franka_dof_props["stiffness"][7:].fill(200.0)
-                franka_dof_props["damping"][7:].fill(10.0)
+            franka_dof_props["driveMode"][7:].fill(gymapi.DOF_MODE_EFFORT)
+            franka_dof_props["stiffness"][7:].fill(0)
+            franka_dof_props["damping"][7:].fill(0)
+            franka_dof_props["friction"][7:] = sim_config["robot"]["gripper_frictions"]
             franka_dof_props["upper"][7:] = self.max_gripper_width / 2
+
+            # set the friction of the fingertips (?)
+            # franka_rigid_shape_props = self.isaac_gym.get_actor_rigid_shape_properties(env, franka_handle)  # 17?
+            # franka_rigid_shape_props[idx].friction = friction_value
 
             self.isaac_gym.set_actor_dof_properties(env, franka_handle, franka_dof_props)
             # Set initial dof states
@@ -435,7 +435,14 @@ class FurnitureSimEnv(gym.Env):
                 part_idx = self.isaac_gym.get_actor_rigid_body_index(env, part_handle, 0, gymapi.DOMAIN_SIM)
                 # Set properties of part.
                 part_props = self.isaac_gym.get_actor_rigid_shape_properties(env, part_handle)
+                # print(f'Part name: {part.name}')
                 part_props[0].friction = sim_config["parts"]["friction"]
+                if 'lamp_hood' in part.name: 
+                    print(f'Setting custom friction for lamp hood')
+                    part_props[0].friction = sim_config["parts"]["friction"] * 5.0
+                if 'lamp_bulb' in part.name: 
+                    print(f'Setting custom rolling friction for lamp bulb')
+                    part_props[0].rolling_friction = part_props[0].rolling_friction * 3.0
                 self.isaac_gym.set_actor_rigid_shape_properties(env, part_handle, part_props)
 
                 if self.part_idxs.get(part.name) is None:
@@ -743,6 +750,17 @@ class FurnitureSimEnv(gym.Env):
                 self.diffik_ctrls[env_idx].ee_pos_error = action[env_idx][:3]
                 self.diffik_ctrls[env_idx].ee_rot_error = R.from_quat(action_quat.cpu().numpy())
 
+                # draw lines
+                for _ in range(100):
+                    noise = (np.random.random(3) - 0.5).astype(np.float32).reshape(1, 3) * 0.001
+                    offset = self.franka_from_origin_mat[:-1, -1].reshape(1, 3)
+                    ee_z_axis = C.quat2mat(ee_quat[env_idx]).cpu().numpy()[:, 2].reshape(1, 3)
+                    line_start = ee_pos[env_idx].cpu().numpy().reshape(1, 3) + offset + noise
+                    line_end = line_start + ee_z_axis
+                    lines = np.concatenate([line_start, line_end], axis=0)
+                    colors = np.array([[1.0, 0.0, 0.0]], dtype=np.float32)
+                    self.isaac_gym.add_lines(self.viewer, self.envs[env_idx], 1, lines, colors)
+
         for _ in range(sim_steps):
             self.refresh()
 
@@ -791,6 +809,7 @@ class FurnitureSimEnv(gym.Env):
                 self.isaac_gym.set_dof_actuation_force_tensor(self.sim, gymtorch.unwrap_tensor(torque_action))
             else:
                 self.isaac_gym.set_dof_position_target_tensor(self.sim, gymtorch.unwrap_tensor(pos_action))
+                self.isaac_gym.set_dof_actuation_force_tensor(self.sim, gymtorch.unwrap_tensor(torque_action))
 
             # Update viewer (suppose if we have the meshcat viewer, we want to draw the scene)
             if (not self.headless) or (self.mc_vis is not None):
@@ -798,6 +817,7 @@ class FurnitureSimEnv(gym.Env):
                 self.isaac_gym.sync_frame_time(self.sim)
 
         self.isaac_gym.end_access_image_tensors(self.sim)
+        self.isaac_gym.clear_lines(self.viewer)
 
         obs = self._get_observation()
         self.env_steps += 1
@@ -921,6 +941,9 @@ class FurnitureSimEnv(gym.Env):
         self.isaac_gym.refresh_mass_matrix_tensors(self.sim)
         self.isaac_gym.render_all_camera_sensors(self.sim)
         self.isaac_gym.start_access_image_tensors(self.sim)
+
+        # remove lines
+        # self.isaac_gym.clear_lines(self.viewer)
 
     def init_ctrl(self):
         # Positional and velocity gains for robot control.

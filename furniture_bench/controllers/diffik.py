@@ -29,8 +29,8 @@ def diffik_factory(real_robot=True, *args, **kwargs):
             self.ee_pos_error = None
             self.ee_rot_error = None
 
-            self.pos_scalar = 3.0
-            self.rot_scalar = 10.0
+            self.pos_scalar = 2.0
+            self.rot_scalar = 6.0
 
         def forward(self, state_dict: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
             # Get states.
