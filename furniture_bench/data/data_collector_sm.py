@@ -86,6 +86,8 @@ class DataCollectorSpaceMouse:
         show_pbar: bool = False,
         obs_type: str = "state",
         encoder_type: str = "vip",
+        ctrl_mode: str = "osc",
+        ee_laser: bool = True
     ):
         """
         Args:
@@ -102,6 +104,7 @@ class DataCollectorSpaceMouse:
             pkl_only (bool): Whether to save only `pkl` files (i.e., exclude *.mp4 and *.png).
             save_failure (bool): Whether to save failure trajectories.
             num_demos (int): The maximum number of demonstrations to collect in this run. Internal loop will be terminated when this number is reached.
+            ctrl_mode (str): 'osc' (joint torque, with operation space control) or 'diffik' (joint impedance, with differential inverse kinematics control)
         """
         if is_sim:
             sim_type = dict(
@@ -121,6 +124,8 @@ class DataCollectorSpaceMouse:
                 compute_device_id=gpu_id,
                 graphics_device_id=gpu_id,
                 resize_img=small_sim_img_size,
+                ctrl_mode=ctrl_mode,
+                ee_laser=ee_laser
             )
             if obs_type != "feature":
                 kwargs.update(

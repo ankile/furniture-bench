@@ -74,6 +74,14 @@ def main():
         default="quat",
     )
 
+    parser.add_argument(
+        "--ctrl-mode",
+        type=str,
+        help="Type of low level controller to use.",
+        choices=["osc", "diffik"],
+        default="osc",
+    )
+
     parser.add_argument("--num-envs", type=int, default=1)
     parser.add_argument("-m", "--meshcat", action="store_true", help="Whether or not to use meshcat")
     parser.add_argument("-p", "--port", type=int, default=6000, help="What meshcat port to use")
@@ -99,7 +107,8 @@ def main():
         randomness=args.randomness,
         high_random_idx=args.high_random_idx,
         act_rot_repr=args.act_rot_repr,
-        mc_vis=mc_vis
+        mc_vis=mc_vis,
+        ctrl_mode=args.ctrl_mode
     )
 
     # Initialize FurnitureSim.

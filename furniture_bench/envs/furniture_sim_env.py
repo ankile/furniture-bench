@@ -104,6 +104,37 @@ def meshcat_frame_show(mc_vis, name, transform=None, length=0.1, radius=0.008, o
         mc_vis[name][axes_name[i]].set_transform(X)
 
 
+def isaac_viewer_frame_show(transform=None, length=0.1, radius=0.008, opacity=1.):
+    """
+    Initializes coordinate axes of a frame T. The x-axis is drawn red,
+    y-axis green and z-axis blue. The axes point in +x, +y and +z directions,
+    respectively.
+    Args:
+        transform (np.ndarray): 4 x 4 matrix representing the pose
+        length: the length of each axis in meters.
+        radius: the radius of each axis in meters.
+        opacity: the opacity of the coordinate axes, between 0 and 1.
+    """
+
+    # colors = [0xff0000, 0x00ff00, 0x0000ff]
+    colors = np.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]).astype(np.float32)
+    rotation_axes = [[1, 0, 0], [0, 1, 0], [0, 0, 1]]
+
+    lines_list = []
+    for i in range(3):
+        line_start = np.zeros(3).reshape(1, 3)
+        line_end = line_start + np.asarray(rotation_axes[i]).astype(np.float32) * length
+        lines = np.concatenate([line_start, line_end], axis=0)
+
+        rotated_lines = (transform[:-1, :-1] @ lines.T).T
+        transformed_lines = rotated_lines + transform[:-1, -1]
+
+        lines_list.append(transformed_lines)
+    
+    lines = np.asarray(lines_list).reshape(6, 3).astype(np.float32)
+    return lines, colors
+
+
 ASSET_ROOT = str(Path(__file__).parent.parent.absolute() / "assets")
 
 
@@ -134,6 +165,7 @@ class FurnitureSimEnv(gym.Env):
         verbose: bool = True,
         mc_vis: meshcat.Visualizer = None,
         ctrl_mode: str = 'diffik',
+        ee_laser: bool = False,
         **kwargs,
     ):
         """
@@ -158,7 +190,7 @@ class FurnitureSimEnv(gym.Env):
             max_env_steps (int): Maximum number of steps per episode (default: 3000).
             act_rot_repr (str): Representation of rotation for action space. Options are 'quat' and 'axis'.
             mc_vis (meshcat.Visualizer): Handler for meshcat sim_web_visualizer
-            ctrl_mode (str): 'osc' (joint torque) or 'diffik' (joint impedance)
+            ctrl_mode (str): 'osc' (joint torque, with operation space control) or 'diffik' (joint impedance, with differential inverse kinematics control)
         """
         super(FurnitureSimEnv, self).__init__()
         self.device = torch.device("cuda", compute_device_id)
@@ -223,8 +255,10 @@ class FurnitureSimEnv(gym.Env):
                 sim_params=sim_config["sim_params"],
             )
             self.mc_vis.viz['scene'].delete()
-        
+
+        # our flags 
         self.ctrl_mode = ctrl_mode
+        self.ee_laser = ee_laser
 
         self._create_ground_plane()
         self._setup_lights()
@@ -721,8 +755,6 @@ class FurnitureSimEnv(gym.Env):
         sim_steps = int(
             1.0 / config["robot"]["hz"] / sim_config["sim_params"].dt / sim_config["sim_params"].substeps + 0.1
         )
-        sim_steps = 1
-        # print(f'sim_steps: {sim_steps}')
         if not self.ctrl_started:
             self.init_ctrl()
         # Set the goal
@@ -739,27 +771,24 @@ class FurnitureSimEnv(gym.Env):
                     C.quat_multiply(ee_quat[env_idx], action_quat).to(self.device),
                 )
             else:
-                # self.diffik_ctrls[env_idx].set_goal(
-                #     action[env_idx][:3] + ee_pos[env_idx],
-                #     C.quat_multiply(ee_quat[env_idx], action_quat).to(self.device),
-                # )
+                # self.diffik_ctrls[env_idx].ee_pos_error = action[env_idx][:3]
+                # self.diffik_ctrls[env_idx].ee_rot_error = R.from_quat(action_quat.cpu().numpy())
 
-                # self.diffik_ctrls[env_idx].ee_pos_desired = action[env_idx][:3] + ee_pos[env_idx]
-                # self.diffik_ctrls[env_idx].ee_quat_desired = C.quat_multiply(ee_quat[env_idx], action_quat).to(self.device)
+                self.diffik_ctrls[env_idx].set_goal(
+                    action[env_idx][:3] + ee_pos[env_idx],
+                    C.quat_multiply(ee_quat[env_idx], action_quat).to(self.device))
 
-                self.diffik_ctrls[env_idx].ee_pos_error = action[env_idx][:3]
-                self.diffik_ctrls[env_idx].ee_rot_error = R.from_quat(action_quat.cpu().numpy())
-
-                # draw lines
-                for _ in range(100):
-                    noise = (np.random.random(3) - 0.5).astype(np.float32).reshape(1, 3) * 0.001
-                    offset = self.franka_from_origin_mat[:-1, -1].reshape(1, 3)
-                    ee_z_axis = C.quat2mat(ee_quat[env_idx]).cpu().numpy()[:, 2].reshape(1, 3)
-                    line_start = ee_pos[env_idx].cpu().numpy().reshape(1, 3) + offset + noise
-                    line_end = line_start + ee_z_axis
-                    lines = np.concatenate([line_start, line_end], axis=0)
-                    colors = np.array([[1.0, 0.0, 0.0]], dtype=np.float32)
-                    self.isaac_gym.add_lines(self.viewer, self.envs[env_idx], 1, lines, colors)
+                if self.ee_laser:
+                    # draw lines
+                    for _ in range(100):
+                        noise = (np.random.random(3) - 0.5).astype(np.float32).reshape(1, 3) * 0.001
+                        offset = self.franka_from_origin_mat[:-1, -1].reshape(1, 3)
+                        ee_z_axis = C.quat2mat(ee_quat[env_idx]).cpu().numpy()[:, 2].reshape(1, 3)
+                        line_start = ee_pos[env_idx].cpu().numpy().reshape(1, 3) + offset + noise
+                        line_end = line_start + ee_z_axis
+                        lines = np.concatenate([line_start, line_end], axis=0)
+                        colors = np.array([[1.0, 0.0, 0.0]], dtype=np.float32)
+                        self.isaac_gym.add_lines(self.viewer, self.envs[env_idx], 1, lines, colors)
 
         for _ in range(sim_steps):
             self.refresh()
@@ -783,9 +812,14 @@ class FurnitureSimEnv(gym.Env):
 
                 state_dict = {}
                 ee_pos, ee_quat = self.get_ee_pose()
+
                 state_dict["ee_pose"] = C.pose2mat(
                     ee_pos[env_idx], ee_quat[env_idx], self.device
                 ).t()  # OSC expect column major
+                # state_dict["ee_pose"] = C.pose2mat(ee_pos[env_idx], ee_quat[env_idx], self.device)
+                state_dict['ee_pos'] = ee_pos[env_idx]
+                state_dict['ee_quat'] = ee_quat[env_idx]
+
                 state_dict["joint_positions"] = self.dof_pos[env_idx][:7]
                 state_dict["joint_velocities"] = self.dof_vel[env_idx][:7]
                 state_dict["mass_matrix"] = self.mm[env_idx][:7, :7].t()  # OSC expect column major
@@ -1329,8 +1363,6 @@ class FurnitureSimEnv(gym.Env):
             else:
                 self.move_neutral = False
 
-        print(f'Here to check out self.furniture.should_be_assembled')
-        from IPython import embed; embed()
         part_idx1, part_idx2 = self.furniture.should_be_assembled[self.assemble_idx]
 
         part1 = self.furniture.parts[part_idx1]
@@ -1354,6 +1386,7 @@ class FurnitureSimEnv(gym.Env):
                 torch.tensor([0, 0, 0, 0, 0, 0, 1, -1], dtype=torch.float32, device=self.device).unsqueeze(0),
                 1,
             )  # Skill complete is always 1 when assembled.
+        
         if not part1.pre_assemble_done:
             goal_pos, goal_ori, gripper, skill_complete = part1.pre_assemble(
                 ee_pos,
@@ -1418,7 +1451,22 @@ class FurnitureSimEnv(gym.Env):
                     device=self.device,
                 ),
             ).to(self.device)
+
         action = torch.concat([delta_pos, delta_quat, gripper])
+        
+        # debug lines between current and goal
+        current_tf = np.eye(4); current_tf[:-1, -1] = ee_pos.cpu().numpy(); current_tf[:-1, :-1] = R.from_quat(ee_quat.cpu().numpy()).as_matrix()
+        goal_tf = np.eye(4); goal_tf[:-1, -1] = goal_pos.cpu().numpy(); goal_tf[:-1, :-1] = R.from_quat(goal_ori.cpu().numpy()).as_matrix()
+
+        current_frame_lines, current_frame_colors = isaac_viewer_frame_show(transform=current_tf)
+        goal_frame_lines, goal_frame_colors = isaac_viewer_frame_show(transform=goal_tf)
+        offset = self.franka_from_origin_mat[:-1, -1].reshape(1, 3)
+        current_frame_lines = current_frame_lines + offset
+        goal_frame_lines = goal_frame_lines + offset
+
+        self.isaac_gym.add_lines(self.viewer, self.envs[0], int(current_frame_lines.shape[0] / 2), current_frame_lines, current_frame_colors)
+        self.isaac_gym.add_lines(self.viewer, self.envs[0], int(goal_frame_lines.shape[0] / 2), goal_frame_lines, goal_frame_colors)
+
         return action.unsqueeze(0), skill_complete
 
     def assembly_success(self):

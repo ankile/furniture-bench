@@ -54,6 +54,22 @@ def main():
     parser.add_argument("--randomness", default="low", choices=["low", "med", "high"])
     parser.add_argument("--gpu-id", default=0, type=int)
     parser.add_argument("--num-demos", default=100, type=int)
+
+    parser.add_argument(
+        "--ctrl-mode",
+        type=str,
+        help="Type of low level controller to use.",
+        choices=["osc", "diffik"],
+        default="osc",
+    )
+
+    parser.add_argument(
+        "--no-ee-laser",
+        action="store_false",
+        help="If set, will not show the laser coming from the end effector",
+        dest="ee_laser",
+    )
+
     args = parser.parse_args()
 
     device_interface = None
@@ -76,6 +92,8 @@ def main():
         pkl_only=args.pkl_only,
         save_failure=args.save_failure,
         num_demos=args.num_demos,
+        ctrl_mode=args.ctrl_mode,
+        ee_laser=args.ee_laser
     )
     data_collector.collect()
 
