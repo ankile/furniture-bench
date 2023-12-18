@@ -191,6 +191,7 @@ class FurnitureSimEnv(gym.Env):
             act_rot_repr (str): Representation of rotation for action space. Options are 'quat' and 'axis'.
             mc_vis (meshcat.Visualizer): Handler for meshcat sim_web_visualizer
             ctrl_mode (str): 'osc' (joint torque, with operation space control) or 'diffik' (joint impedance, with differential inverse kinematics control)
+            ee_laser (bool): If True, show a line coming from the end-effector in the viewer
         """
         super(FurnitureSimEnv, self).__init__()
         self.device = torch.device("cuda", compute_device_id)
@@ -766,29 +767,25 @@ class FurnitureSimEnv(gym.Env):
             )
 
             if self.ctrl_mode == 'osc':
-                self.osc_ctrls[env_idx].set_goal(
-                    action[env_idx][:3] + ee_pos[env_idx],
-                    C.quat_multiply(ee_quat[env_idx], action_quat).to(self.device),
-                )
+                step_ctrl = self.osc_ctrls[env_idx]
             else:
-                # self.diffik_ctrls[env_idx].ee_pos_error = action[env_idx][:3]
-                # self.diffik_ctrls[env_idx].ee_rot_error = R.from_quat(action_quat.cpu().numpy())
+                step_ctrl = self.diffik_ctrls[env_idx]
+            step_ctrl.set_goal(
+                action[env_idx][:3] + ee_pos[env_idx],
+                C.quat_multiply(ee_quat[env_idx], action_quat).to(self.device),
+            )
 
-                self.diffik_ctrls[env_idx].set_goal(
-                    action[env_idx][:3] + ee_pos[env_idx],
-                    C.quat_multiply(ee_quat[env_idx], action_quat).to(self.device))
-
-                if self.ee_laser:
-                    # draw lines
-                    for _ in range(100):
-                        noise = (np.random.random(3) - 0.5).astype(np.float32).reshape(1, 3) * 0.001
-                        offset = self.franka_from_origin_mat[:-1, -1].reshape(1, 3)
-                        ee_z_axis = C.quat2mat(ee_quat[env_idx]).cpu().numpy()[:, 2].reshape(1, 3)
-                        line_start = ee_pos[env_idx].cpu().numpy().reshape(1, 3) + offset + noise
-                        line_end = line_start + ee_z_axis
-                        lines = np.concatenate([line_start, line_end], axis=0)
-                        colors = np.array([[1.0, 0.0, 0.0]], dtype=np.float32)
-                        self.isaac_gym.add_lines(self.viewer, self.envs[env_idx], 1, lines, colors)
+            if self.ee_laser:
+                # draw lines
+                for _ in range(100):
+                    noise = (np.random.random(3) - 0.5).astype(np.float32).reshape(1, 3) * 0.001
+                    offset = self.franka_from_origin_mat[:-1, -1].reshape(1, 3)
+                    ee_z_axis = C.quat2mat(ee_quat[env_idx]).cpu().numpy()[:, 2].reshape(1, 3)
+                    line_start = ee_pos[env_idx].cpu().numpy().reshape(1, 3) + offset + noise
+                    line_end = line_start + ee_z_axis
+                    lines = np.concatenate([line_start, line_end], axis=0)
+                    colors = np.array([[1.0, 0.0, 0.0]], dtype=np.float32)
+                    self.isaac_gym.add_lines(self.viewer, self.envs[env_idx], 1, lines, colors)
 
         for _ in range(sim_steps):
             self.refresh()

@@ -87,7 +87,8 @@ class DataCollectorSpaceMouse:
         obs_type: str = "state",
         encoder_type: str = "vip",
         ctrl_mode: str = "osc",
-        ee_laser: bool = True
+        ee_laser: bool = True,
+        right_multiply_rot: bool = True
     ):
         """
         Args:
@@ -105,6 +106,8 @@ class DataCollectorSpaceMouse:
             save_failure (bool): Whether to save failure trajectories.
             num_demos (int): The maximum number of demonstrations to collect in this run. Internal loop will be terminated when this number is reached.
             ctrl_mode (str): 'osc' (joint torque, with operation space control) or 'diffik' (joint impedance, with differential inverse kinematics control)
+            ee_laser (bool): If True, show a line coming from the end-effector in the viewer
+            right_multiply_rot (bool): If True, convert rotation actions (delta rot) assuming they're applied as RIGHT multiplys (local rotations)
         """
         if is_sim:
             sim_type = dict(
@@ -176,6 +179,9 @@ class DataCollectorSpaceMouse:
         self.pbar = None if not show_pbar else tqdm(total=self.num_demos)
         self.obs_type = obs_type
 
+        # our flags
+        self.right_multiply_rot = right_multiply_rot
+
         self._reset_collector_buffer()
 
     def _squeeze_and_numpy(self, v):
@@ -225,20 +231,35 @@ class DataCollectorSpaceMouse:
 
         translation, quat_xyzw = self.env.get_ee_pose()
         env_device = self.env.device
-        translation, quat_xyzw = translation.cpu().numpy(), quat_xyzw.cpu().numpy()
+        translation, quat_xyzw = translation.cpu().numpy().squeeze(), quat_xyzw.cpu().numpy().squeeze()
         rotvec = st.Rotation.from_quat(quat_xyzw).as_rotvec()
-        target_pose = np.array([*translation, *rotvec])
+        target_pose_rv = np.array([*translation, *rotvec])
         grasp_flag = torch.from_numpy(np.array([-1])).to(env_device)
         gripper_open = True
 
-        def to_isaac_pose(pose_, device):
-            target_translation = torch.from_numpy(pose_[:3]).float().to(device)
-            target_quat_xyzw = torch.from_numpy(st.Rotation.from_rotvec(pose_[3:]).as_quat()).float().to(device)
-            return target_translation, target_quat_xyzw
+        def pose_rv2mat(pose_rv):
+            pose_mat = np.eye(4)
+            pose_mat[:-1, -1] = pose_rv[:3]
+            pose_mat[:-1, :-1] = st.Rotation.from_rotvec(pose_rv[3:]).as_matrix()
+            return pose_mat
 
-        def to_isaac_delta_pose(dpos_np, dquat_np, grasp_flag, device):
-            target_translation = torch.from_numpy(dpos_np).float().to(device)
-            target_quat_xyzw = torch.from_numpy(dquat_np).float().to(device)
+        def to_isaac_dpose_from_abs(current_pose_mat, goal_pose_mat, grasp_flag, device, rm=True):
+            """
+            Convert from absolute current and desired pose to delta pose
+
+            Args:
+                rm (bool): 'rm' stands for 'right multiplication' - If True, assume commands send as right multiply (local rotations)
+            """
+            if rm:
+                delta_rot_mat = np.linalg.inv(current_pose_mat[:-1, :-1]) @ goal_pose_mat[:-1, :-1]
+            else:
+                delta_rot_mat = goal_pose_mat[:-1 :-1] @ np.linalg.inv(current_pose_mat[:-1, :-1])
+            
+            dpos = goal_pose_mat[:-1, -1] - current_pose_mat[:-1, -1]
+            target_translation = torch.from_numpy(dpos).float().to(device)
+            
+            target_rot = st.Rotation.from_matrix(delta_rot_mat)
+            target_quat_xyzw = torch.from_numpy(target_rot.as_quat()).float().to(device)
             target_dpose = torch.cat((target_translation, target_quat_xyzw, grasp_flag), dim=-1).reshape(1, -1)
             return target_dpose
 
@@ -283,15 +304,23 @@ class DataCollectorSpaceMouse:
                         ready_to_grasp = False
                         steps_since_grasp = 0
 
-                    # new_target_pose = target_pose.copy()
-                    # new_target_pose[:3] += dpos
-                    # new_target_pose[3:] = (
-                    #     drot * st.Rotation.from_rotvec(target_pose[3:])
-                    # ).as_rotvec()
+                    new_target_pose_rv = target_pose_rv.copy()
+                    new_target_pose_rv[:3] += dpos
+                    new_target_pose_rv[3:] = (drot * st.Rotation.from_rotvec(target_pose_rv[3:])).as_rotvec()
+
+                    target_pose_mat = pose_rv2mat(target_pose_rv)
+                    new_target_pose_mat = pose_rv2mat(new_target_pose_rv)
                     
                     # convert this into the furniture bench info we need
                     # action, collect_enum = to_isaac_pose(new_target_pose), CollectEnum.DONE_FALSE  # TODO
-                    action = to_isaac_delta_pose(dpos, drot.as_quat(), grasp_flag, env_device)
+                    action = to_isaac_dpose_from_abs(
+                        current_pose_mat=target_pose_mat,
+                        goal_pose_mat=new_target_pose_mat,
+                        grasp_flag=grasp_flag,
+                        device=env_device,
+                        rm=self.right_multiply_rot
+                    ) 
+
                     collect_enum = CollectEnum.DONE_FALSE  # TODO
 
                     skill_complete = int(collect_enum == CollectEnum.SKILL)
@@ -406,13 +435,14 @@ class DataCollectorSpaceMouse:
                     obs = next_obs
 
                     # target_pose = new_target_pose
-                    # translation, quat_xyzw = self.env.get_ee_pose()
-                    # translation, quat_xyzw = translation.cpu().numpy(), quat_xyzw.cpu().numpy()
-                    # rotvec = st.Rotation.from_quat(quat_xyzw).as_rotvec()
-                    # target_pose = np.array([*translation, *rotvec])
+                    translation, quat_xyzw = self.env.get_ee_pose()
+                    translation, quat_xyzw = translation.cpu().numpy().squeeze(), quat_xyzw.cpu().numpy().squeeze()
+                    rotvec = st.Rotation.from_quat(quat_xyzw).as_rotvec()
+                    target_pose_rv = np.array([*translation, *rotvec])
 
                     # SM wait
                     precise_wait(t_cycle_end)
+                    iter_idx += 1
 
                 self.verbose_print(f"Collected {self.traj_counter} / {self.num_demos} successful trajectories!")
 
