@@ -30,8 +30,8 @@ def diffik_factory(real_robot=True, *args, **kwargs):
             self.ee_pos_error = None
             self.ee_rot_error = None
 
-            self.pos_scalar = 2.0
-            self.rot_scalar = 6.0
+            self.pos_scalar = 2.5
+            self.rot_scalar = 7.0
 
             self.scale_errors = True
 
@@ -45,7 +45,7 @@ def diffik_factory(real_robot=True, *args, **kwargs):
             ee_pos, ee_quat = state_dict["ee_pos"], state_dict["ee_quat"]
 
             position_error = self.goal_pos - ee_pos
-            # quat_error = C.quat_mul(C.quat_conjugate(ee_quat), self.goal_ori)
+            # quat_error = C.quat_mul(self.goal_ori, C.quat_conjugate(ee_quat))
 
             ee_mat = C.quat2mat(ee_quat).to(joint_pos_current.device)
             goal_mat = C.quat2mat(self.goal_ori).to(joint_pos_current.device)

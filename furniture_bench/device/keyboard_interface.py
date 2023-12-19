@@ -23,7 +23,8 @@ class KeyboardInterface(DeviceInterface):
 
     # INIT_POS_DELTA = 0.02
     INIT_POS_DELTA = 0.01
-    INIT_ROT_DELTA = 0.13  # Radian.
+    # INIT_ROT_DELTA = 0.13  # Radian.
+    INIT_ROT_DELTA = 0.18  # Radian.
 
     MAX_POS_DELTA = 0.1
     MAX_ROT_DELTA = 0.2  # Radian.
@@ -69,13 +70,16 @@ class KeyboardInterface(DeviceInterface):
                 self.key_enum = CollectEnum.FAIL
             elif k.isdigit():
                 gym.logger.info(f"Reward pressed: {k}")
+                print(f"Reward pressed: {k}")
                 self.rew_key = int(k)
                 self.key_enum = CollectEnum.REWARD
             elif k == "`":
                 gym.logger.info("Skill complete pressed")
+                print("Skill complete pressed")
                 self.key_enum = CollectEnum.SKILL
             elif k == "r":
                 gym.logger.info("Reset pressed")
+                print("Reset pressed")
                 self.key_enum = CollectEnum.RESET
         except AttributeError as e:
             pass

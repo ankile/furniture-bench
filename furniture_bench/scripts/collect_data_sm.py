@@ -72,7 +72,7 @@ def main():
 
     args = parser.parse_args()
 
-    device_interface = None
+    keyboard_device_interface = make_device("keyboard")
 
     data_path = osp.join(args.out_data_path, args.furniture)
     if not osp.isdir(data_path):
@@ -81,11 +81,14 @@ def main():
     data_collector = DataCollectorSpaceMouse(
         is_sim=args.is_sim,
         data_path=data_path,
-        device_interface=device_interface,
+        device_interface=keyboard_device_interface,
         furniture=args.furniture,
         headless=args.headless,
         draw_marker=args.draw_marker,
         manual_label=args.manual_label,
+        obs_type='image',
+        resize_img_after_sim=False, 
+        small_sim_img_size=True,  # raw sim images come downsized (i.e., don't call separate resize function)
         scripted=args.scripted,
         randomness=args.randomness,
         gpu_id=args.gpu_id,

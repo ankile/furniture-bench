@@ -128,7 +128,7 @@ class DataCollectorSpaceMouse:
                 graphics_device_id=gpu_id,
                 resize_img=small_sim_img_size,
                 ctrl_mode=ctrl_mode,
-                ee_laser=ee_laser
+                ee_laser=ee_laser,
             )
             if obs_type != "feature":
                 kwargs.update(
@@ -269,13 +269,10 @@ class DataCollectorSpaceMouse:
             with Spacemouse(shm_manager=shm_manager, deadzone=args.deadzone) as sm:
                 t_start = time.monotonic()
                 iter_idx = 0
-                stop = False
+                prev_keyboard_gripper = -1
 
-                # while not stop:
                 while self.num_success < self.num_demos:
                     if self.scripted:
-                        # action, skill_complete = self.env.get_assembly_action()
-                        # collect_enum = CollectEnum.DONE_FALSE
                         raise ValueError('Not using scripted with spacemouse')
 
                     # Get an action.
@@ -292,17 +289,29 @@ class DataCollectorSpaceMouse:
                     drot_xyz = sm_state[3:] * (args.max_rot_speed / frequency)
                     drot = st.Rotation.from_euler("xyz", drot_xyz)
 
+                    keyboard_action, collect_enum = self.device_interface.get_action()  # from the keyboard
+
+                    if np.allclose(dpos, 0.0) and np.allclose(drot_xyz, 0.0):
+                        action_taken = False
+                    else:
+                        action_taken = True
+
                     steps_since_grasp += 1
                     if steps_since_grasp > 10:
                         ready_to_grasp = True
+                    if steps_since_grasp < 10:
+                        action_taken = True
 
-                    if (sm.is_button_pressed(0) or sm.is_button_pressed(1)) and ready_to_grasp:
+                    kb_grasp = (prev_keyboard_gripper != keyboard_action[-1])
+                    sm_grasp = (sm.is_button_pressed(0) or sm.is_button_pressed(1)) and ready_to_grasp
+                    if kb_grasp or sm_grasp:
                         # env.gripper_close() if gripper_open else env.gripper_open()
                         grasp_flag = -1 * grasp_flag
                         gripper_open = not gripper_open
 
                         ready_to_grasp = False
                         steps_since_grasp = 0
+                    prev_keyboard_gripper = keyboard_action[-1]
 
                     new_target_pose_rv = target_pose_rv.copy()
                     new_target_pose_rv[:3] += dpos
@@ -321,7 +330,9 @@ class DataCollectorSpaceMouse:
                         rm=self.right_multiply_rot
                     ) 
 
-                    collect_enum = CollectEnum.DONE_FALSE  # TODO
+                    if not (np.allclose(keyboard_action[:6], 0.0)):
+                        action[0, :7] = torch.from_numpy(keyboard_action[:7]).float().to(action.device)
+                        action_taken = True
 
                     skill_complete = int(collect_enum == CollectEnum.SKILL)
                     if skill_complete == 1:
@@ -401,37 +412,38 @@ class DataCollectorSpaceMouse:
                         continue
 
                     # Logging a step.
-                    self.step_counter += 1
-                    self.verbose_print(
-                        f"{[self.step_counter]} assembled: {self.env.furniture.assembled_set} num assembled: {len(self.env.furniture.assembled_set)} Skill: {len(self.skill_set)}"
-                    )
+                    if action_taken:
+                        self.step_counter += 1
+                        print(
+                            f"{[self.step_counter]} assembled: {self.env.furniture.assembled_set} num assembled: {len(self.env.furniture.assembled_set)} Skill: {len(self.skill_set)}"
+                        )
 
-                    # Store a transition.
-                    if info["action_success"]:
-                        if self.is_sim:
-                            for k, v in obs.items():
-                                if isinstance(v, dict):
-                                    for k1, v1 in v.items():
-                                        v[k1] = self._squeeze_and_numpy(v1)
+                        # Store a transition.
+                        if info["action_success"]:
+                            if self.is_sim:
+                                for k, v in obs.items():
+                                    if isinstance(v, dict):
+                                        for k1, v1 in v.items():
+                                            v[k1] = v1.squeeze().cpu().numpy()
+                                    else:
+                                        obs[k] = v.squeeze().cpu().numpy()
+                                if isinstance(rew, torch.Tensor):
+                                    rew = float(rew.squeeze().cpu())
+
+                            self.org_obs.append(obs.copy())
+
+                            ob = {}
+                            self._set_dictionary(to=ob, from_=obs)
+                            self.obs.append(ob)
+                            if self.is_sim:
+                                if isinstance(action, torch.Tensor):
+                                    action = action.squeeze().cpu().numpy()
                                 else:
-                                    obs[k] = self._squeeze_and_numpy(v)
-                            if isinstance(rew, torch.Tensor):
-                                rew = float(rew.squeeze().cpu())
+                                    action = action.squeeze()
+                            self.acts.append(action)
+                            self.rews.append(rew)
+                            self.skills.append(skill_complete)
 
-                        self.org_obs.append(obs.copy())
-                        ob = {}
-
-                        self._set_dictionary(to=ob, from_=obs)
-
-                        self.obs.append(ob)
-                        if self.is_sim:
-                            if isinstance(action, torch.Tensor):
-                                action = action.squeeze().cpu().numpy()
-                            else:
-                                action = action.squeeze()
-                        self.acts.append(action)
-                        self.rews.append(rew)
-                        self.skills.append(skill_complete)
                     obs = next_obs
 
                     # target_pose = new_target_pose
