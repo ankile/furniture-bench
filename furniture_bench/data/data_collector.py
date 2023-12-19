@@ -180,6 +180,7 @@ class DataCollector:
 
             # An episode is done.
             if done or collect_enum in [CollectEnum.SUCCESS, CollectEnum.FAIL]:
+                print("done", done, "enumn", collect_enum)
                 if self.is_sim:
                     # Convert it to numpy.
                     for k, v in next_obs.items():
@@ -310,7 +311,7 @@ class DataCollector:
         self.skill_set = []
 
     def save(self, collect_enum: CollectEnum, info):
-        self.verbose_print(f"Length of trajectory: {len(self.obs)}")
+        self.verbose_print(f"Length of trajectory: {len(self.obs)}, collect_enum: {collect_enum}")
 
         data_name = datetime.now().strftime("%Y-%m-%d-%H:%M:%S")
         demo_path = self.data_path / data_name
@@ -337,7 +338,7 @@ class DataCollector:
             data["actions"] = self.acts
             data["rewards"] = self.rews
             data["skills"] = self.skills
-            data["success"] = True if collect_enum == CollectEnum.SUCCESS else False
+            data["success"] = collect_enum == CollectEnum.SUCCES
             data["furniture"] = self.furniture
 
             if "error" in info:

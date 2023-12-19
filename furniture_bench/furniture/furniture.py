@@ -387,9 +387,7 @@ class Furniture(ABC):
         return 0
 
     def all_assembled(self) -> bool:
-        if len(self.assembled_set) == len(self.should_be_assembled):
-            return True
-        return False
+        return len(self.assembled_set) == len(self.should_be_assembled)
 
     def parts_out_pos_lim(self) -> bool:
         parts_poses, _ = self.get_parts_poses_founds()

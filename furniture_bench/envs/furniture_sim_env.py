@@ -775,6 +775,9 @@ class FurnitureSimEnv(gym.Env):
                 C.quat_multiply(ee_quat[env_idx], action_quat).to(self.device),
             )
 
+        for _ in range(sim_steps):
+            self.refresh()
+
             if self.ee_laser:
                 # draw lines
                 for _ in range(100):
@@ -786,9 +789,6 @@ class FurnitureSimEnv(gym.Env):
                     lines = np.concatenate([line_start, line_end], axis=0)
                     colors = np.array([[1.0, 0.0, 0.0]], dtype=np.float32)
                     self.isaac_gym.add_lines(self.viewer, self.envs[env_idx], 1, lines, colors)
-
-        for _ in range(sim_steps):
-            self.refresh()
 
             pos_action = torch.zeros_like(self.dof_pos)
             torque_action = torch.zeros_like(self.dof_pos)
@@ -846,9 +846,10 @@ class FurnitureSimEnv(gym.Env):
             if (not self.headless) or (self.mc_vis is not None):
                 self.isaac_gym.draw_viewer(self.viewer, self.sim, False)
                 self.isaac_gym.sync_frame_time(self.sim)
+                self.isaac_gym.clear_lines(self.viewer)
 
         self.isaac_gym.end_access_image_tensors(self.sim)
-        self.isaac_gym.clear_lines(self.viewer)
+        # self.isaac_gym.clear_lines(self.viewer)
 
         obs = self._get_observation()
         self.env_steps += 1

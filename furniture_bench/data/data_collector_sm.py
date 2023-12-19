@@ -361,15 +361,14 @@ class DataCollectorSpaceMouse:
 
                         self.obs.append(n_ob)
 
-                        if done and not self.env.furnitures[0].all_assembled():
+                        if (done and not self.env.furnitures[0].all_assembled()) or collect_enum is CollectEnum.FAIL:
+                            collect_enum = CollectEnum.FAIL
                             if self.save_failure:
                                 self.verbose_print("Saving failure trajectory.")
-                                collect_enum = CollectEnum.FAIL
                                 obs = self.save_and_reset(collect_enum, {})
                             else:
                                 self.verbose_print("Failed to assemble the furniture, reset without saving.")
                                 obs = self.reset()
-                                collect_enum = CollectEnum.SUCCESS
                             self.num_fail += 1
                         else:
                             if done:
