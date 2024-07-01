@@ -4,7 +4,7 @@ from scipy.spatial.transform import Rotation as R
 
 
 def scale_scripted_action(
-    action: torch.Tensor, pos_bounds_m=0.01, ori_bounds_deg=3, device="cpu"
+    action: torch.Tensor, pos_bounds_m=0.01, ori_bounds_deg=3
 ) -> torch.Tensor:
     """Scale down the action that is provided from the scripted policy.
     Raw action comes in the form of a "delta EE pose", we can directly
@@ -43,9 +43,11 @@ def scale_scripted_action(
         delta_rotvec_scaled = delta_axis * delta_norm_clipped
 
         # convert back to quat, and create modified action
-        quat_error = torch.from_numpy(R.from_rotvec(delta_rotvec_scaled).as_quat())
+        quat_error = torch.from_numpy(R.from_rotvec(delta_rotvec_scaled).as_quat()).to(
+            action.device
+        )
     action_scaled = torch.cat(
         (position_error, quat_error, gripper_act), dim=-1
     ).reshape(1, -1)
 
-    return action_scaled.float().to(device)
+    return action_scaled.float()

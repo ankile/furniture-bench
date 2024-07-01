@@ -93,6 +93,8 @@ def detection_loop(config, parts, num_parts, tag_size, lock, shm):
     cam1_to_base = None
     cam2_to_base = get_cam_to_base(cam2, 2)
     cam3_to_base = get_cam_to_base(cam3, 3)
+    print(f"cam2_to_base: {cam2_to_base}")
+    print(f"cam3_to_base: {cam3_to_base}")
 
     april_tag = AprilTag(tag_size)
     color_shape = (
@@ -205,22 +207,30 @@ def _get_parts_poses(
         cam1_pose = None
         cam2_pose = _get_parts_pose(part, tags2)
         cam3_pose = _get_parts_pose(part, tags3)
+        # print(f"cam2_pose: {cam2_pose}")
+        # print(f"cam3_pose: {cam3_pose}")
         if cam1_pose is not None:
-            cam1_pose = cam1_to_base @ cam1_pose
+            cam1_pose_base = cam1_to_base @ cam1_pose
         if cam2_pose is not None:
-            cam2_pose = cam2_to_base @ cam2_pose
+            cam2_pose_base = cam2_to_base @ cam2_pose
         if cam3_pose is not None:
-            cam3_pose = cam3_to_base @ cam3_pose
+            cam3_pose_base = cam3_to_base @ cam3_pose
 
         if cam1_pose is not None or cam2_pose is not None or cam3_pose is not None:
             pose1 = (
-                part.pose_filter[0].filter(cam1_pose) if cam1_pose is not None else None
+                part.pose_filter[0].filter(cam1_pose_base)
+                if cam1_pose is not None
+                else None
             )
             pose2 = (
-                part.pose_filter[1].filter(cam2_pose) if cam2_pose is not None else None
+                part.pose_filter[1].filter(cam2_pose_base)
+                if cam2_pose is not None
+                else None
             )
             pose3 = (
-                part.pose_filter[2].filter(cam3_pose) if cam3_pose is not None else None
+                part.pose_filter[2].filter(cam3_pose_base)
+                if cam3_pose is not None
+                else None
             )
             pose = comp_avg_pose([pose1, pose2, pose3])
 
@@ -249,9 +259,9 @@ def _get_parts_poses(
                     tags2,
                     tags3,
                 ) = read_detect()
-        cam1_pose = inv(cam1_to_base) @ cam1_pose if cam1_pose is not None else None
-        cam2_pose = inv(cam2_to_base) @ cam2_pose if cam2_pose is not None else None
-        cam3_pose = inv(cam3_to_base) @ cam3_pose if cam3_pose is not None else None
+        # cam1_pose = inv(cam1_to_base) @ cam1_pose if cam1_pose is not None else None
+        # cam2_pose = inv(cam2_to_base) @ cam2_pose if cam2_pose is not None else None
+        # cam3_pose = inv(cam3_to_base) @ cam3_pose if cam3_pose is not None else None
 
     parts_founds = np.array(parts_founds, dtype=bool)
     return (

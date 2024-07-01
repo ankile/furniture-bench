@@ -5,6 +5,7 @@ from abc import ABC, abstractmethod
 import numpy as np
 import numpy.typing as npt
 import torch
+from typing import List
 
 from furniture_bench.furniture.parts.pose_filter import PoseFilter
 from furniture_bench.utils.pose import get_mat, is_similar_pos, is_similar_pose, rot_mat
@@ -22,7 +23,7 @@ class Part(ABC):
         self.name = part_config["name"]
         self.asset_file = part_config["asset_file"]
         self.tag_ids = part_config["ids"]
-        self.reset_pos = part_config["reset_pos"].copy()
+        self.reset_pos: List[np.ndarray] = part_config["reset_pos"].copy()
         self.reset_ori = part_config.get("reset_ori").copy()
         self.center_from_anchor = None  # should be set in subclass.
         self.rel_pose_from_center = {}  # should be set in subclass.
@@ -66,7 +67,7 @@ class Part(ABC):
         self.reset_pos[0] = self.part_config["high_rand_reset_pos"][high_random_idx][0]
         self.reset_ori[0] = self.part_config["high_rand_reset_ori"][high_random_idx][0]
 
-    def is_collision(self, part2):
+    def is_collision(self, part2: "Part"):
         """Check if the part is collided with another part without considering rotation."""
         p_x1 = -(self.reset_x_len / 2)
         p_y1 = self.reset_y_len / 2

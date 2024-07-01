@@ -8,14 +8,17 @@ import numpy as np
 from furniture_bench.utils.pose import get_mat, rot_mat
 
 # ROBOT_HEIGHT = 0.015  # Approximate height of bench clamp: 1.5 cm.
-ROBOT_HEIGHT = 0.0  # Not using bench clamp.
+ROBOT_HEIGHT = -0.01  # 0.015  # Approximate height of bench clamp: 1.5 cm.
 
 # Fill in information below or define environment variables.
 SERVER_IP = os.getenv("SERVER_IP", "")
-CAM_WRIST_SERIAL = os.getenv("CAM_WRIST_SERIAL", "")
-CAM_FRONT_SERIAL = os.getenv("CAM_FRONT_SERIAL", "")
-CAM_REAR_SERIAL = os.getenv("CAM_REAR_SERIAL", "")
-
+# CAM_WRIST_SERIAL = os.getenv("CAM_WRIST_SERIAL", "")
+# CAM_FRONT_SERIAL = os.getenv("CAM_FRONT_SERIAL", "")
+# CAM_REAR_SERIAL = os.getenv("CAM_REAR_SERIAL", "")
+CAM_WRIST_SERIAL = "843112073228"
+# CAM_FRONT_SERIAL = "242522072326"
+CAM_FRONT_SERIAL = "242522072355"
+CAM_REAR_SERIAL = "242622071805"
 
 config: Dict[str, Any] = {
     "robot": {
@@ -30,9 +33,13 @@ config: Dict[str, Any] = {
             2.49649072,
             0.01921718,
         ],
-        "base_tag_xyz": (0.23 + 0.0715, 0, -ROBOT_HEIGHT),
+        # "base_tag_xyz": (0.23 + 0.0715, 0, -ROBOT_HEIGHT),
+        # "tag_base_from_robot_base": get_mat(
+        #     (0.23 + 0.0715, 0, -ROBOT_HEIGHT), (np.pi, 0, np.pi / 2)
+        # ),  # Relative pose of the base tag from the robot base. This can be used to convert the pose in the base tag's coordinate to the robot's coordinate.
+        "base_tag_xyz": (0.23 + 0.06, 0.02, -ROBOT_HEIGHT),
         "tag_base_from_robot_base": get_mat(
-            (0.23 + 0.0715, 0, -ROBOT_HEIGHT), (np.pi, 0, np.pi / 2)
+            (0.23 + 0.06, 0.02, -ROBOT_HEIGHT), (np.pi, 0, np.pi / 2)
         ),  # Relative pose of the base tag from the robot base. This can be used to convert the pose in the base tag's coordinate to the robot's coordinate.
         "max_gripper_width": {
             "square_table": 0.065,
