@@ -14,6 +14,8 @@ from furniture_bench.utils.pose import comp_avg_pose
 from furniture_bench.perception.realsense import read_detect
 from furniture_bench.config import config
 
+from ipdb import set_trace as bp
+
 
 def get_cam_to_base(cam=None, cam_num=-1, img=None, cam_intr=None, april_tag=None):
     """Get homogeneous transforms that maps camera points to base points."""
@@ -74,27 +76,43 @@ def detection_loop(config, parts, num_parts, tag_size, lock, shm):
         config["camera"]["color_img_size"],
         config["camera"]["depth_img_size"],
         config["camera"]["frame_rate"],
+        num=1,
     )
     cam2 = RealsenseCam(
         config["camera"][2]["serial"],
         config["camera"]["color_img_size"],
         config["camera"]["depth_img_size"],
         config["camera"]["frame_rate"],
-        config["camera"][2]["roi"],
+        # config["camera"][2]["roi"],
+        num=2,
     )
     cam3 = RealsenseCam(
         config["camera"][3]["serial"],
         config["camera"]["color_img_size"],
         config["camera"]["depth_img_size"],
         config["camera"]["frame_rate"],
+        num=3,
     )
+
+    cam4 = None
+    if 4 in config["camera"]:
+        cam4 = RealsenseCam(
+            config["camera"][4]["serial"],
+            config["camera"]["color_img_size"],
+            config["camera"]["depth_img_size"],
+            config["camera"]["frame_rate"],
+            num=4,
+        )
     print("Camera initialized")
 
-    cam1_to_base = None
+    cam1_to_base = get_cam_to_base(cam1, 1)
     cam2_to_base = get_cam_to_base(cam2, 2)
     cam3_to_base = get_cam_to_base(cam3, 3)
-    print(f"cam2_to_base: {cam2_to_base}")
-    print(f"cam3_to_base: {cam3_to_base}")
+    cam4_to_base = get_cam_to_base(cam4, 4) if cam4 is not None else None
+    # print(f"cam1_to_base: {cam1_to_base}")
+    # print(f"cam2_to_base: {cam2_to_base}")
+    # print(f"cam3_to_base: {cam3_to_base}")
+    # print(f"cam4_to_base: {cam4_to_base}")
 
     april_tag = AprilTag(tag_size)
     color_shape = (
@@ -118,6 +136,8 @@ def detection_loop(config, parts, num_parts, tag_size, lock, shm):
             cam1_to_base,
             cam2_to_base,
             cam3_to_base,
+            cam4,
+            cam4_to_base,
         )
         parts_poses_shm = shared_memory.SharedMemory(name=shm[0])
         parts_founds_shm = shared_memory.SharedMemory(name=shm[1])
@@ -176,6 +196,8 @@ def _get_parts_poses(
     cam1_to_base,
     cam2_to_base,
     cam3_to_base,
+    cam4=None,
+    cam4_to_base=None,
 ):
     """
     Args:
@@ -199,14 +221,16 @@ def _get_parts_poses(
         tags1,
         tags2,
         tags3,
-    ) = read_detect(april_tag, cam1, cam2, cam3)
+        tags4,
+    ) = read_detect(april_tag, cam1, cam2, cam3, cam4)
 
     for part in parts:
         part_idx = part.part_idx
 
-        cam1_pose = None
+        cam1_pose = _get_parts_pose(part, tags1)
         cam2_pose = _get_parts_pose(part, tags2)
         cam3_pose = _get_parts_pose(part, tags3)
+        cam4_pose = _get_parts_pose(part, tags4)
         # print(f"cam2_pose: {cam2_pose}")
         # print(f"cam3_pose: {cam3_pose}")
         if cam1_pose is not None:
@@ -215,8 +239,15 @@ def _get_parts_poses(
             cam2_pose_base = cam2_to_base @ cam2_pose
         if cam3_pose is not None:
             cam3_pose_base = cam3_to_base @ cam3_pose
+        if cam4_pose is not None:
+            cam4_pose_base = cam4_to_base @ cam4_pose
 
-        if cam1_pose is not None or cam2_pose is not None or cam3_pose is not None:
+        if (
+            cam1_pose is not None
+            or cam2_pose is not None
+            or cam3_pose is not None
+            or cam4_pose is not None
+        ):
             pose1 = (
                 part.pose_filter[0].filter(cam1_pose_base)
                 if cam1_pose is not None
@@ -232,7 +263,14 @@ def _get_parts_poses(
                 if cam3_pose is not None
                 else None
             )
-            pose = comp_avg_pose([pose1, pose2, pose3])
+            pose4 = (
+                part.pose_filter[3].filter(cam4_pose_base)
+                if cam4_pose is not None
+                else None
+            )
+
+            pose = comp_avg_pose([pose1, pose2, pose3, pose4])
+            # pose = comp_avg_pose([pose1, pose2, pose3])
 
             parts_poses[part_idx * 7 : (part_idx + 1) * 7] = np.concatenate(
                 list(T.mat2pose(pose))
@@ -258,6 +296,7 @@ def _get_parts_poses(
                     tags1,
                     tags2,
                     tags3,
+                    tags4,
                 ) = read_detect()
         # cam1_pose = inv(cam1_to_base) @ cam1_pose if cam1_pose is not None else None
         # cam2_pose = inv(cam2_to_base) @ cam2_pose if cam2_pose is not None else None
@@ -323,6 +362,8 @@ def detect_front_rear(parts, num_parts, cam2_to_base, cam3_to_base, tags2, tags3
 
 
 def _get_parts_pose(part, tags):
+    if tags is None:
+        return None
     poses = []
     for tag_id in part.tag_ids:
         tag = tags.get(tag_id)

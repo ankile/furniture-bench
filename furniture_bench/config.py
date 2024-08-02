@@ -20,6 +20,9 @@ CAM_WRIST_SERIAL = "843112073228"
 CAM_FRONT_SERIAL = "242522072355"
 CAM_REAR_SERIAL = "242622071805"
 
+# CAM_WRIST_FOUR = "840412060551"
+CAM_WRIST_FOUR = "242522072326"
+
 config: Dict[str, Any] = {
     "robot": {
         "server_ip": SERVER_IP,
@@ -62,7 +65,7 @@ config: Dict[str, Any] = {
         "motion_stopped_counter_threshold": 50,  # Number of steps to wait when the robot stopped moving before declaring the episode done.
     },
     "camera": {
-        "num_camera": 3,
+        "num_camera": 4,
         1: {
             "serial": CAM_WRIST_SERIAL,
             "rel_pose_from_base": get_mat(
@@ -78,6 +81,12 @@ config: Dict[str, Any] = {
         },
         3: {
             "serial": CAM_REAR_SERIAL,
+            "rel_pose_from_base": get_mat(
+                [0.25, -0.13, -0.31], [np.pi / 2 - np.pi / 4, 0, -np.pi + np.pi / 6]
+            ),
+        },
+        4: {
+            "serial": CAM_WRIST_FOUR,
             "rel_pose_from_base": get_mat(
                 [0.25, -0.13, -0.31], [np.pi / 2 - np.pi / 4, 0, -np.pi + np.pi / 6]
             ),

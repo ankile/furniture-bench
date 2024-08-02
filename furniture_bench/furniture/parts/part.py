@@ -18,7 +18,7 @@ class Part(ABC):
     @abstractmethod
     def __init__(self, part_config, part_idx: int):
         # Three pose filter. (Each camera has filter.)
-        self.pose_filter = [PoseFilter(), PoseFilter(), PoseFilter()]
+        self.pose_filter = [PoseFilter(), PoseFilter(), PoseFilter(), PoseFilter()]
         self.part_config = copy.deepcopy(part_config)
         self.name = part_config["name"]
         self.asset_file = part_config["asset_file"]
