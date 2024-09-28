@@ -1,4 +1,5 @@
 """Visualize AprilTag detection from three cameras."""
+
 import argparse
 import numpy as np
 import cv2
@@ -9,13 +10,13 @@ from furniture_bench.utils.draw import draw_tags
 from furniture_bench.config import config
 
 
-def detect_draw(april_tag, cam: RealsenseCam):
+def detect_draw(april_tag: AprilTag, cam: RealsenseCam):
     color_frame, depth_frame = cam.get_frame()
     depth_image = np.asanyarray(depth_frame.get_data()).copy()
 
     img = np.asanyarray(color_frame.get_data()).copy()
 
-    tags = april_tag.detect(color_frame, cam.intr_param)
+    tags = april_tag.detect(color_frame, cam.intr_param, cam_num=cam.num)
     # Visualize tags.
     draw_image = draw_tags(img.copy(), cam, tags)
 
@@ -33,6 +34,7 @@ def main():
         config["camera"]["color_img_size"],
         config["camera"]["depth_img_size"],
         config["camera"]["frame_rate"],
+        num=1,
     )
     cam2 = RealsenseCam(
         config["camera"][2]["serial"],
@@ -41,12 +43,21 @@ def main():
         config["camera"]["frame_rate"],
         None,
         disable_auto_exposure=True,
+        num=2,
     )
     cam3 = RealsenseCam(
         config["camera"][3]["serial"],
         config["camera"]["color_img_size"],
         config["camera"]["depth_img_size"],
         config["camera"]["frame_rate"],
+        num=3,
+    )
+    cam4 = RealsenseCam(
+        config["camera"][4]["serial"],
+        config["camera"]["color_img_size"],
+        config["camera"]["depth_img_size"],
+        config["camera"]["frame_rate"],
+        num=4,
     )
     april_tag = AprilTag(tag_size=0.0195)
 
@@ -56,7 +67,11 @@ def main():
         color_img1, depth_image1 = detect_draw(april_tag, cam1)
         color_img2, depth_image2 = detect_draw(april_tag, cam2)
         color_img3, depth_image3 = detect_draw(april_tag, cam3)
-        color_img = np.hstack([color_img1, color_img2, color_img3])
+        color_img4, depth_image4 = detect_draw(april_tag, cam4)
+        color_img_top = np.hstack([color_img1, color_img2])
+        color_img_bottom = np.hstack([color_img3, color_img4])
+        color_img = np.vstack([color_img_top, color_img_bottom])
+
         color_img = cv2.cvtColor(color_img, cv2.COLOR_RGB2BGR)
         if args.show_depth:
             depth_image1 = cv2.applyColorMap(

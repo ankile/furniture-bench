@@ -10,6 +10,7 @@ class PoseFilter:
         self.pose_queue = deque(maxlen=5)
 
     def filter(self, pose):
+        # return pose
         if len(self.pose_queue) == 0:
             self.pose_queue.append(pose)
             return pose

@@ -5,6 +5,9 @@ import numpy.typing as npt
 from furniture_bench.perception.realsense import RealsenseCam
 
 
+from ipdb import set_trace as bp
+
+
 def draw_tags(
     color_image: npt.NDArray[np.uint8], cam: RealsenseCam, tags
 ) -> npt.NDArray[np.uint8]:

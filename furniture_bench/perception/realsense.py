@@ -5,6 +5,8 @@ import pyrealsense2 as rs
 
 from furniture_bench.perception.apriltag import AprilTag
 
+from ipdb import set_trace as bp
+
 
 class RealsenseCam:
     def __init__(
@@ -15,9 +17,11 @@ class RealsenseCam:
         frame_rate,
         roi=None,
         disable_auto_exposure: bool = False,
+        num: int = 0,
     ):
         self.started = False
         self.serial = serial
+        self.num = num
 
         if serial is None:
             from furniture_bench.config import config
@@ -36,6 +40,7 @@ class RealsenseCam:
         self.pipeline = rs.pipeline()
         # Configure streams
         config = rs.config()
+        # bp()
         config.enable_device(self.serial)
         config.enable_stream(
             rs.stream.color, *self.color_res, rs.format.rgb8, self.frame_rate
@@ -165,14 +170,23 @@ def frame_to_image(color_frame, depth_frame):
 
 
 def read_detect(
-    april_tag: AprilTag, cam1: RealsenseCam, cam2: RealsenseCam, cam3: RealsenseCam
+    april_tag: AprilTag,
+    cam1: RealsenseCam,
+    cam2: RealsenseCam,
+    cam3: RealsenseCam,
+    cam4: RealsenseCam = None,
 ):
     color_img1, depth_img1 = cam1.get_image()
     color_img2, depth_img2 = cam2.get_image()
     color_img3, depth_img3 = cam3.get_image()
-    tags1 = april_tag.detect_id(color_img1, cam1.intr_param)
-    tags2 = april_tag.detect_id(color_img2, cam2.intr_param)
-    tags3 = april_tag.detect_id(color_img3, cam3.intr_param)
+    tags1 = april_tag.detect_id(color_img1, cam1.intr_param, cam_num=cam1.num)
+    tags2 = april_tag.detect_id(color_img2, cam2.intr_param, cam_num=cam2.num)
+    tags3 = april_tag.detect_id(color_img3, cam3.intr_param, cam_num=cam3.num)
+    tags4 = None
+    if cam4 is not None:
+        color_img4, depth_img4 = cam4.get_image()
+        tags4 = april_tag.detect_id(color_img4, cam4.intr_param, cam_num=cam4.num)
+        # print(f"tags4: {tags4}")
 
     return (
         color_img1,
@@ -184,4 +198,5 @@ def read_detect(
         tags1,
         tags2,
         tags3,
+        tags4,
     )
